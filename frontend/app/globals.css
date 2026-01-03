@@ -1,0 +1,623 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap&text-rendering=optimizeLegibility');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    @apply bg-background;
+    /* Force dark theme by default */
+    background-color: #0b1220;
+  }
+  
+  body {
+    @apply bg-background text-text-primary font-sans antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* Force dark theme background by default */
+    background-color: #0b1220;
+    color: #e5e7eb;
+  }
+  
+  /* Ensure dark theme is applied even without class */
+  html:not(.light) {
+    background-color: #0b1220;
+  }
+  
+  html:not(.light) body {
+    background-color: #0b1220;
+    color: #e5e7eb;
+  }
+  
+  /* Force Inter font everywhere, remove monospace fallbacks */
+  * {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  
+  /* Light theme colors - layered whites and soft grays for depth */
+  :root {
+    --tw-bg-background: #ffffff;          /* Main app background - pure white */
+    --tw-bg-page-bg: #f9fafb;            /* Secondary background - soft gray */
+    --tw-bg-panel: #f3f4f6;              /* Sidebar/panels - slightly darker gray */
+    --tw-bg-card: #ffffff;               /* Cards/containers - white */
+    --tw-bg-hover: #f1f5f9;              /* Hover background - very light gray */
+    --tw-bg-input: #f9fafb;              /* Input background - soft tint */
+    --tw-bg-table-header: #f1f5f9;       /* Table header background */
+    --tw-bg-table-row: #fafafa;          /* Alternating table row */
+    --tw-border-border: #e5e7eb;         /* Borders/dividers - soft gray */
+    --tw-border-input: #d1d5db;          /* Input borders - slightly darker */
+    --tw-text-text-primary: #111827;     /* Primary text - dark gray */
+    --tw-text-text-secondary: #374151;   /* Secondary text - medium gray */
+    --tw-text-text-muted: #6b7280;       /* Muted text - lighter gray */
+    --tw-primary: #2563eb;                /* Accent blue */
+  }
+
+  /* Premium dark theme colors with clear hierarchy */
+  .dark {
+    --tw-bg-background: #0b1220;        /* Deep app background */
+    --tw-bg-page-bg: #0e1628;            /* Page background */
+    --tw-bg-panel: #0a1020;              /* Sidebar/panels */
+    --tw-bg-card: #121b2f;               /* Cards/panels */
+    --tw-bg-hover: #182447;              /* Hover background */
+    --tw-bg-input: #121b2f;              /* Input background */
+    --tw-bg-table-header: #121b2f;       /* Table header background */
+    --tw-bg-table-row: #0e1628;          /* Alternating table row */
+    --tw-border-border: #1f2a44;         /* Borders/dividers */
+    --tw-border-input: #1f2a44;           /* Input borders */
+    --tw-text-text-primary: #e5e7eb;     /* Primary text - soft off-white */
+    --tw-text-text-secondary: #9ca3af;  /* Secondary text - muted gray */
+    --tw-text-text-muted: #6b7280;       /* Disabled/muted text - darker gray */
+    --tw-primary: #3b82f6;               /* Accent blue */
+  }
+  
+  /* Light theme background colors */
+  body {
+    background-color: var(--tw-bg-background);
+    color: var(--tw-text-text-primary);
+  }
+  
+  .bg-background {
+    background-color: var(--tw-bg-background);
+  }
+  
+  .bg-page-bg {
+    background-color: var(--tw-bg-page-bg);
+  }
+  
+  .bg-panel {
+    background-color: var(--tw-bg-panel);
+  }
+  
+  .bg-card {
+    background-color: var(--tw-bg-card);
+  }
+  
+  .bg-hover {
+    background-color: var(--tw-bg-hover);
+  }
+  
+  .border-border {
+    border-color: var(--tw-border-border);
+  }
+  
+  .border-border-subtle {
+    border-color: rgba(229, 231, 235, 0.5);
+  }
+
+  /* Dark theme overrides */
+  .dark body {
+    background-color: var(--tw-bg-background);
+    color: var(--tw-text-text-primary);
+  }
+  
+  .dark .bg-background {
+    background-color: var(--tw-bg-background);
+  }
+  
+  .dark .bg-page-bg {
+    background-color: var(--tw-bg-page-bg);
+  }
+  
+  .dark .bg-panel {
+    background-color: var(--tw-bg-panel);
+  }
+  
+  .dark .bg-card {
+    background-color: var(--tw-bg-card);
+  }
+  
+  .dark .bg-hover {
+    background-color: var(--tw-bg-hover);
+  }
+  
+  .dark .border-border {
+    border-color: var(--tw-border-border);
+  }
+  
+  .dark .border-border-subtle {
+    border-color: rgba(31, 42, 68, 0.5);
+  }
+  
+  /* Typography improvements for dark theme */
+  .dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  
+  .dark p, .dark span, .dark div {
+    font-weight: 400;
+  }
+  
+  .dark .font-medium {
+    font-weight: 500;
+  }
+  
+  .dark .font-semibold {
+    font-weight: 600;
+  }
+  
+  /* Light theme text colors */
+  .text-text-primary {
+    color: var(--tw-text-text-primary);
+  }
+  
+  .text-text-secondary {
+    color: var(--tw-text-text-secondary);
+  }
+  
+  .text-text-muted {
+    color: var(--tw-text-text-muted);
+  }
+
+  /* Dark theme text colors */
+  .dark .text-text-primary {
+    color: var(--tw-text-text-primary);
+  }
+  
+  .dark .text-text-secondary {
+    color: var(--tw-text-text-secondary);
+  }
+  
+  .dark .text-text-muted {
+    color: var(--tw-text-text-muted);
+  }
+  
+  /* Typography hierarchy for dark theme */
+  .dark h1 {
+    color: #e5e7eb;
+    font-weight: 600;
+  }
+  
+  .dark h2 {
+    color: #e5e7eb;
+    font-weight: 600;
+  }
+  
+  .dark h3 {
+    color: #e5e7eb;
+    font-weight: 600;
+  }
+  
+  .dark p {
+    color: #e5e7eb;
+  }
+  
+  .dark label {
+    color: #9ca3af;
+  }
+  
+  /* Ensure disabled text is clearly muted */
+  .dark .text-disabled,
+  .dark [disabled] {
+    color: #6b7280;
+  }
+  
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background-color: #0a1020;
+  }
+  
+  .dark ::-webkit-scrollbar-track {
+    background-color: #0a1020;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-sm;
+  }
+  
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: #1f2a44;
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+  
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background-color: #2a3654;
+  }
+  
+  /* Hide scrollbar for sidebar navigation */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari, Opera */
+  }
+}
+
+@layer utilities {
+  /* Glass effect */
+  .glass {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(4px);
+  }
+  
+  .dark .glass {
+    background: rgba(18, 27, 47, 0.8);
+    backdrop-filter: blur(8px);
+  }
+  
+  /* Premium button styles for dark theme */
+  .dark button {
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+  
+  /* Input styling for light theme */
+  input,
+  textarea,
+  select {
+    background-color: var(--tw-bg-input);
+    border-color: var(--tw-border-input);
+    color: var(--tw-text-text-primary);
+  }
+  
+  input::placeholder,
+  textarea::placeholder,
+  select::placeholder {
+    color: var(--tw-text-text-muted);
+    opacity: 0.8;
+  }
+  
+  select {
+    background-color: var(--tw-bg-input);
+    border-color: var(--tw-border-input);
+    color: var(--tw-text-text-primary);
+  }
+  
+  select option {
+    background-color: var(--tw-bg-input);
+    color: var(--tw-text-text-primary);
+  }
+  
+  /* Force dark theme for select options */
+  html:not(.light) select option {
+    background-color: #121b2f;
+    color: #e5e7eb;
+  }
+  
+  input:focus,
+  textarea:focus,
+  select:focus {
+    border-color: var(--tw-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  }
+
+  /* Input styling for dark theme */
+  .dark input,
+  .dark textarea,
+  .dark select {
+    background-color: #121b2f;
+    border-color: #1f2a44;
+    color: #f1f5f9;
+  }
+  
+  .dark input::placeholder,
+  .dark textarea::placeholder,
+  .dark select::placeholder {
+    color: #6b7280;
+    opacity: 0.8;
+  }
+  
+  .dark select {
+    background-color: #121b2f;
+    border-color: #1f2a44;
+    color: #e5e7eb;
+  }
+  
+  .dark select option {
+    background-color: #121b2f;
+    color: #e5e7eb;
+  }
+  
+  .dark input:focus,
+  .dark textarea:focus,
+  .dark select:focus {
+    border-color: #3b82f6;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+  
+  /* Icon alignment with text */
+  .dark svg {
+    display: inline-block;
+    vertical-align: middle;
+  }
+  
+  /* Ensure icons inherit text color */
+  .dark svg[class*="text-"],
+  .dark svg {
+    color: inherit;
+  }
+  
+  /* Smooth transitions for all interactive elements */
+  .dark button,
+  .dark a,
+  .dark [role="button"] {
+    transition: all 200ms ease;
+  }
+  
+  /* Remove any boxy appearances */
+  .dark * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Compact table styling */
+  .table-compact {
+    @apply text-xs;
+  }
+  
+  .table-compact th,
+  .table-compact td {
+    @apply py-2 px-3;
+  }
+  
+  /* Numeric alignment */
+  .text-numeric {
+    @apply text-right;
+  }
+  
+  /* Hover effects */
+  .hover-lift {
+    transition: transform 100ms ease, background-color 100ms ease;
+  }
+  
+  .hover-lift:hover {
+    transform: translateY(-1px);
+  }
+  
+  .hover-lift:active {
+    transform: translateY(0);
+  }
+  
+  /* Responsive sidebar layout */
+  .sidebar-layout {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    height: 100vh;
+    overflow: hidden;
+  }
+  
+  /* Icon animations */
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+  
+  @keyframes iconBounce {
+    0%, 100% {
+      transform: translateY(0) scale(1);
+    }
+    50% {
+      transform: translateY(-2px) scale(1.05);
+    }
+  }
+
+  @keyframes iconShake {
+    0%, 100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-2px);
+    }
+    75% {
+      transform: translateX(2px);
+    }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.85;
+      transform: scale(1.05);
+    }
+  }
+
+  /* Button click animation - small flash effect on click (no expanding ring) */
+  @keyframes buttonClick {
+    0% {
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    }
+    50% {
+      box-shadow: 0 0 8px 2px rgba(59, 130, 246, 0.5);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    }
+  }
+
+  /* Modal popup animation - consistent across all modals */
+  @keyframes modalSlideIn {
+    0% {
+      opacity: 0;
+      transform: scale(0.9) translateY(-20px);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  /* Modal fade-in from center animation */
+  @keyframes modalFadeIn {
+    0% {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Secondary popup animation - same as primary but smoother */
+  @keyframes secondaryModalSlideIn {
+    0% {
+      opacity: 0;
+      transform: scale(0.92) translateY(-15px);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  /* Backdrop fade-in animation */
+  @keyframes backdropFadeIn {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  /* Icon button animations */
+  .btn-icon-hover {
+    transition: all 200ms ease;
+  }
+
+  .btn-icon-hover:hover {
+    transform: scale(1.1);
+    opacity: 0.9;
+  }
+
+  /* Icon button animation classes */
+  .icon-button {
+    transition: all 200ms ease;
+  }
+
+  .icon-button-bounce:hover {
+    animation: iconBounce 0.5s ease-in-out;
+  }
+
+  .icon-button-pulse:hover {
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  .icon-button-shake:hover {
+    animation: iconShake 0.5s ease-in-out;
+  }
+
+  .icon-button-spin:hover {
+    animation: spin 1s linear infinite;
+  }
+
+  /* Button click animation class - triggers on every click - small flash effect */
+  .button-click-animation {
+    animation: buttonClick 0.3s ease-out;
+    outline: none;
+    position: relative;
+  }
+  
+  /* Light theme button click animation */
+  html:not(.dark) .button-click-animation {
+    animation: buttonClickLight 0.3s ease-out;
+  }
+  
+  @keyframes buttonClickLight {
+    0% {
+      box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+    }
+    50% {
+      box-shadow: 0 0 8px 2px rgba(37, 99, 235, 0.5);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+    }
+  }
+  
+  /* Ensure buttons don't have translate animations */
+  button,
+  .button-click-animation {
+    transform: none !important;
+  }
+  
+  button:active,
+  .button-click-animation:active {
+    transform: none !important;
+  }
+
+  /* Modal animation classes */
+  .modal-backdrop {
+    animation: backdropFadeIn 0.2s ease-out;
+  }
+
+  .modal-content {
+    animation: modalSlideIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+
+  .secondary-modal-content {
+    animation: secondaryModalSlideIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+  
+  /* Responsive breakpoints */
+  @media (max-width: 768px) {
+    /* Tablet: default to collapsed sidebar */
+    .sidebar-responsive {
+      width: 4rem !important;
+    }
+  }
+  
+  @media (max-width: 640px) {
+    /* Mobile: overlay sidebar */
+    .sidebar-mobile {
+      position: fixed;
+      z-index: 50;
+      transform: translateX(-100%);
+      transition: transform 200ms ease;
+    }
+    
+    .sidebar-mobile.open {
+      transform: translateX(0);
+    }
+  }
+}

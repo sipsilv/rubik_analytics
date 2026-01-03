@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ../..
+      dockerfile: server/docker/backend.Dockerfile
+    container_name: rubik-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATA_DIR=/app/data
+      - DATABASE_URL=sqlite:///./data/auth/sqlite/auth.db
+      - DUCKDB_PATH=./data/analytics/duckdb
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      - JWT_SYSTEM_SECRET_KEY=${JWT_SYSTEM_SECRET_KEY:-your-system-secret-key-change-in-production}
+      - JWT_ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=480
+      - IDLE_TIMEOUT_MINUTES=30
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:--zvS8bDaaYPj2qyeuZxkKYKq6npYXC5GuBwnWUJsyck=}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000}
+    volumes:
+      # Mount entire data directory for multi-database support
+      - ../data:/app/data
+      # Ensure data subdirectories exist
+      - ../data/auth:/app/data/auth
+      - ../data/analytics:/app/data/analytics
+      - ../data/Company Fundamentals:/app/data/Company Fundamentals
+      - ../data/symbols:/app/data/symbols
+      - ../data/connection:/app/data/connection
+      - ../data/connections:/app/data/connections
+      - ../data/logs:/app/data/logs
+      - ../data/temp:/app/data/temp
+      - ../data/backups:/app/data/backups
+    restart: unless-stopped
+    networks:
+      - rubik-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: server/docker/frontend.Dockerfile
+    container_name: rubik-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - rubik-network
+
+networks:
+  rubik-network:
+    driver: bridge
+
+volumes:
+  # Named volumes for persistent data (optional - using bind mounts for development)
+  auth_data:
+  analytics_data:
+  connections_data:

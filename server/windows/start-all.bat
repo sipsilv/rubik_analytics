@@ -1,0 +1,181 @@
+@echo off
+REM Rubik Analytics - Start All Servers
+REM Starts both backend and frontend servers
+
+setlocal enabledelayedexpansion
+
+cd /d "%~dp0\..\.."
+
+echo ========================================
+echo Rubik Analytics - Starting All Servers
+echo ========================================
+echo.
+
+REM Check prerequisites
+python --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [ERROR] Python is not installed or not in PATH
+    echo Please install Python 3.8+ and try again
+    pause
+    exit /b 1
+)
+
+node --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [ERROR] Node.js is not installed or not in PATH
+    echo Please install Node.js and try again
+    pause
+    exit /b 1
+)
+
+REM Stop any existing servers first
+echo [INFO] Checking for existing servers...
+call "%~dp0stop-all.bat" >nul 2>&1
+timeout /t 2 /nobreak >nul
+
+REM Check backend setup
+if not exist "backend\venv" (
+    echo [INFO] Backend not set up. Running setup...
+    call "%~dp0backend-setup.bat"
+    if %errorlevel% neq 0 (
+        echo [ERROR] Backend setup failed
+        pause
+        exit /b 1
+    )
+) else (
+    REM Check if dependencies are installed
+    echo [INFO] Checking backend dependencies...
+    cd /d "%~dp0\..\..\backend"
+    if exist "venv\Scripts\python.exe" (
+        "venv\Scripts\python.exe" -c "import uvicorn, fastapi" >nul 2>&1
+        if !errorlevel! neq 0 (
+            echo [WARNING] Backend dependencies not installed!
+            echo [INFO] Running backend setup to install dependencies...
+            cd /d "%~dp0\..\.."
+            call "%~dp0backend-setup.bat"
+            if !errorlevel! neq 0 (
+                echo [ERROR] Backend setup failed - dependencies not installed
+                echo [ERROR] Please run: server\windows\backend-setup.bat manually
+                pause
+                exit /b 1
+            )
+        ) else (
+            echo [OK] Backend dependencies verified
+        )
+    ) else (
+        echo [ERROR] Python executable not found in venv
+        echo [INFO] Running backend setup...
+        cd /d "%~dp0\..\.."
+        call "%~dp0backend-setup.bat"
+        if !errorlevel! neq 0 (
+            echo [ERROR] Backend setup failed
+            pause
+            exit /b 1
+        )
+    )
+    cd /d "%~dp0\..\.."
+)
+
+REM Check frontend setup
+if not exist "frontend\node_modules" (
+    echo [INFO] Frontend not set up. Running setup...
+    call "%~dp0frontend-setup.bat"
+    if %errorlevel% neq 0 (
+        echo [ERROR] Frontend setup failed
+        pause
+        exit /b 1
+    )
+)
+
+REM Database initialization is handled automatically by the backend on startup
+
+REM Verify ports are free and try to free them if needed
+echo [INFO] Checking if ports 8000 and 3000 are available...
+netstat -ano | findstr :8000 >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [WARNING] Port 8000 is in use, attempting to free it...
+    for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8000') do (
+        set PID_VAL=%%a
+        if not "!PID_VAL!"=="" (
+            taskkill /PID !PID_VAL! /F >nul 2>&1
+            if !errorlevel! equ 0 (
+                echo [OK] Freed port 8000 (PID: !PID_VAL!)
+            )
+        )
+    )
+    timeout /t 2 /nobreak >nul
+) else (
+    echo [OK] Port 8000 is available
+)
+
+netstat -ano | findstr :3000 >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [WARNING] Port 3000 is in use, attempting to free it...
+    for /f "tokens=5" %%a in ('netstat -ano ^| findstr :3000') do (
+        set PID_VAL=%%a
+        if not "!PID_VAL!"=="" (
+            taskkill /PID !PID_VAL! /F >nul 2>&1
+            if !errorlevel! equ 0 (
+                echo [OK] Freed port 3000 (PID: !PID_VAL!)
+            )
+        )
+    )
+    timeout /t 2 /nobreak >nul
+) else (
+    echo [OK] Port 3000 is available
+)
+echo [OK] Ports are ready
+
+echo.
+echo [INFO] Starting Backend Server (port 8000)...
+cd /d "%~dp0\..\..\backend"
+if not exist "venv\Scripts\python.exe" (
+    echo [ERROR] Backend virtual environment not found
+    echo Please run: server\windows\backend-setup.bat first
+    pause
+    exit /b 1
+)
+
+REM Get absolute paths (handle spaces in paths)
+cd /d "%~dp0\..\.."
+set "PROJECT_ROOT=%CD%"
+set "BACKEND_DIR=%PROJECT_ROOT%\backend"
+set "FRONTEND_DIR=%PROJECT_ROOT%\frontend"
+
+REM Start backend server directly
+start "Rubik Backend" cmd /k "cd /d "%BACKEND_DIR%" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+
+timeout /t 5 /nobreak >nul
+
+echo [INFO] Starting Frontend Server (port 3000)...
+if not exist "%FRONTEND_DIR%\node_modules" (
+    echo [WARNING] Frontend dependencies not found. Running setup...
+    call "%~dp0frontend-setup.bat"
+    if %errorlevel% neq 0 (
+        echo [ERROR] Frontend setup failed
+        echo Please run: server\windows\frontend-setup.bat manually
+        pause
+        exit /b 1
+    )
+)
+
+REM Start frontend server directly
+start "Rubik Frontend" cmd /k "cd /d "%FRONTEND_DIR%" && npm run dev"
+
+timeout /t 3 /nobreak >nul
+
+echo.
+echo ========================================
+echo Servers Started Successfully
+echo ========================================
+echo.
+echo Backend:  http://localhost:8000
+echo Frontend: http://localhost:3000
+echo API Docs: http://localhost:8000/docs
+echo.
+echo Two windows have been opened for the servers.
+echo Close those windows to stop the servers.
+echo.
+echo To stop all servers, run: stop-all.bat
+echo.
+pause
