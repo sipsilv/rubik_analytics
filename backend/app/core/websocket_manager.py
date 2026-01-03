@@ -20,26 +20,34 @@ class WebSocketManager:
         """Register a new WebSocket connection for a user"""
         await websocket.accept()
         
+        # Check if this is the user's first connection
+        is_first_connection = user_id not in self.active_connections or len(self.active_connections[user_id]) == 0
+        
         if user_id not in self.active_connections:
             self.active_connections[user_id] = set()
         
         self.active_connections[user_id].add(websocket)
         self.connection_users[websocket] = user_id
         
-        print(f"[WebSocket] User {user_id} connected. Total connections: {len(self.connection_users)}")
+        # Only log on first connection for this user to reduce log spam
+        if is_first_connection:
+            print(f"[WebSocket] User {user_id} connected (first connection). Total active users: {len(self.active_connections)}, Total connections: {len(self.connection_users)}")
     
     def disconnect(self, websocket: WebSocket):
         """Remove a WebSocket connection"""
         user_id = self.connection_users.pop(websocket, None)
         
         if user_id and user_id in self.active_connections:
+            # Check if this is the user's last connection
+            was_last_connection = len(self.active_connections[user_id]) == 1
+            
             self.active_connections[user_id].discard(websocket)
             
             # Clean up empty sets
             if not self.active_connections[user_id]:
                 del self.active_connections[user_id]
-        
-        print(f"[WebSocket] User {user_id} disconnected. Total connections: {len(self.connection_users)}")
+                # Only log when user has no more connections (fully disconnected)
+                print(f"[WebSocket] User {user_id} disconnected (all connections closed). Total active users: {len(self.active_connections)}, Total connections: {len(self.connection_users)}")
     
     def is_user_online(self, user_id: int) -> bool:
         """Check if a user has any active WebSocket connections"""
