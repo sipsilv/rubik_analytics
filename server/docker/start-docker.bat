@@ -13,6 +13,16 @@ call ..\windows\stop-all.bat >nul 2>&1
 echo.
 echo [INFO] Building and starting Docker containers...
 REM We are already in server/docker
+
+REM Check if Docker acts responsively
+docker info >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [ERROR] Docker is NOT running!
+    echo Please start Docker Desktop and wait for the engine to start.
+    pause
+    exit /b 1
+)
+
 docker-compose down
 docker-compose up --build -d
 
