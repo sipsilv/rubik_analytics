@@ -645,7 +645,7 @@ export default function ActivityPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={runningScheduler === scheduler.id || scheduler.status === 'running' || scheduler.status === 'queued'}
+                              disabled={isRunning || runningScheduler === scheduler.id || scheduler.status === 'running' || scheduler.status === 'queued'}
                               onClick={(e) => {
                                 e.preventDefault()
                                 e.stopPropagation()
@@ -657,7 +657,6 @@ export default function ActivityPage() {
                                   }
                                 })
                               }}
-                              disabled={isRunning || runningScheduler === scheduler.id}
                               className="text-primary hover:text-primary p-1.5"
                             >
                               <Play className="w-4 h-4 btn-icon-hover icon-button icon-button-pulse" />
