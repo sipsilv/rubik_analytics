@@ -17,6 +17,9 @@ import json
 
 logger = logging.getLogger(__name__)
 
+# Track if WebSocket URL has been logged to avoid repeated logs
+_websocket_url_logged = set()
+
 
 class TrueDataAPIService:
     """Service for calling TrueData APIs with correct authentication"""
@@ -291,6 +294,8 @@ class TrueDataAPIService:
         Note: This returns the URL only. WebSocket connection must be
         established by the caller using a WebSocket client library.
         """
+        global _websocket_url_logged
+        
         credentials = self._get_credentials()
         username = credentials.get("username")
         password = credentials.get("password")
@@ -304,10 +309,14 @@ class TrueDataAPIService:
         # Get WebSocket port from credentials if specified
         websocket_port = credentials.get("websocket_port")
         
+        # Unique key for this connection to track if already logged
+        log_key = f"{self.connection_id}_{websocket_host}_{websocket_port or '9092'}"
+        should_log = log_key not in _websocket_url_logged
+        
         # CRITICAL: Corporate Announcements WebSocket ALWAYS uses port 9092
         # Port 8086 is for Market Data WebSocket (NOT for announcements)
         if websocket_port:
-            if str(websocket_port) != "9092":
+            if str(websocket_port) != "9092" and should_log:
                 logger.warning(
                     f"[WEBSOCKET TYPE] Port {websocket_port} specified in credentials. "
                     f"Corporate Announcements WebSocket should use port 9092. "
@@ -321,22 +330,16 @@ class TrueDataAPIService:
         else:
             # Always use port 9092 for Corporate Announcements (regardless of environment)
             ws_base_url = self.WEBSOCKET_URL_CORPORATE_ANNOUNCEMENTS
-            logger.info(
-                f"[WEBSOCKET TYPE] Using Corporate Announcements WebSocket (port 9092). "
-                f"Port 8086 is reserved for Market Data WebSocket."
-            )
-            print(
-                f"[INFO] [WEBSOCKET TYPE] Corporate Announcements WebSocket - Port 9092 "
-                f"(Port 8086 is for Market Data only)"
-            )
         
         # WebSocket URL with credentials in query params
         ws_url = f"{ws_base_url}?user={username}&password={password}"
         
-        # Log connection details (masked password)
-        masked_url = ws_url.replace(f"password={password}", "password=***")
-        logger.info(f"[WEBSOCKET] Connecting to Corporate Announcements WebSocket: {masked_url}")
-        print(f"[INFO] [WEBSOCKET] Corporate Announcements WebSocket URL: {masked_url}")
+        # Log connection details ONLY ONCE per unique connection (masked password)
+        if should_log:
+            masked_url = ws_url.replace(f"password={password}", "password=***")
+            logger.info(f"[WEBSOCKET] Corporate Announcements WebSocket initialized: {masked_url}")
+            print(f"[WEBSOCKET] Corporate Announcements: CONNECTED - {websocket_host}:{websocket_port or '9092'}")
+            _websocket_url_logged.add(log_key)
         
         return ws_url
     

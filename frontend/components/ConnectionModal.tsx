@@ -225,7 +225,7 @@ export function ConnectionModal({ isOpen, onClose, connection, onUpdate }: Conne
                 WebkitBackdropFilter: 'blur(12px)',
                 opacity: isVisible ? undefined : 0,
                 animation: isVisible ? 'backdropFadeIn 0.3s ease-out' : 'none',
-            }}
+            } as React.CSSProperties}
             onClick={(e) => {
                 if (e.target === e.currentTarget) {
                     handleClose()

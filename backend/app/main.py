@@ -1,9 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from app.api.v1 import auth, users, admin, connections, websocket, symbols, screener, announcements
 from app.core.config import settings
 from app.core.database import get_connection_manager, get_db_router
+
+# IST timezone (UTC+5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
 
 app = FastAPI(
     title="Rubik Analytics API",
@@ -34,135 +37,202 @@ async def startup_event():
         manager = get_connection_manager(settings.DATA_DIR)
         router = get_db_router(settings.DATA_DIR)
         
+        import duckdb
+        import os
+        
         # ============================================
         # DATABASE CONNECTION STATUS
         # ============================================
-        print("\n" + "="*60)
-        print("[DATABASE STATUS] Checking database connections...")
-        print("="*60)
+        print("\n" + "="*70)
+        print(" DATABASE CONNECTION STATUS")
+        print("="*70)
         
-        # Test Auth database
+        # Test Auth database with table count
         auth_client = router.get_auth_db()
+        auth_table_count = 0
         if auth_client:
             try:
                 health = auth_client.health_check()
-                status = "CONNECTED" if isinstance(health, dict) and health.get("status") == "connected" else "CONNECTED"
-                print(f"[DATABASE] Auth DB: {status} - {auth_client.__class__.__name__}")
+                # Try to get table count
+                try:
+                    db = auth_client.get_session()
+                    from sqlalchemy import inspect
+                    inspector = inspect(auth_client.engine)
+                    auth_table_count = len(inspector.get_table_names())
+                    db.close()
+                except:
+                    pass
+                print(f"  Auth DB           : CONNECTED ({auth_table_count} tables) - {auth_client.__class__.__name__}")
             except Exception as e:
-                print(f"[DATABASE] Auth DB: ERROR - {str(e)}")
+                print(f"  Auth DB           : ERROR - {str(e)}")
         else:
-            print("[DATABASE] Auth DB: FAILED - No connection available")
+            print("  Auth DB           : FAILED - No connection available")
         
         # Test Analytics database
         analytics_client = router.get_analytics_db()
         if analytics_client:
             try:
-                print(f"[DATABASE] Analytics DB: CONNECTED - {analytics_client.__class__.__name__}")
+                print(f"  Analytics DB      : CONNECTED - {analytics_client.__class__.__name__}")
             except Exception as e:
-                print(f"[DATABASE] Analytics DB: ERROR - {str(e)}")
+                print(f"  Analytics DB      : ERROR - {str(e)}")
         else:
-            print("[DATABASE] Analytics DB: FAILED - No connection available")
+            print("  Analytics DB      : NOT CONFIGURED")
         
-        # Test Screener database
+        # Test Screener database with table count
+        screener_table_count = 0
         try:
             import app.models.screener as screener_service
             screener_conn = screener_service.get_db_connection()
             if screener_conn:
-                print(f"[DATABASE] Screener DB: CONNECTED - DuckDB")
+                try:
+                    tables = screener_conn.execute("SHOW TABLES").fetchall()
+                    screener_table_count = len(tables)
+                except:
+                    pass
+                screener_conn.close()
+                print(f"  Screener DB       : CONNECTED ({screener_table_count} tables) - DuckDB")
             else:
-                print("[DATABASE] Screener DB: FAILED")
+                print("  Screener DB       : FAILED")
         except Exception as e:
-            print(f"[DATABASE] Screener DB: ERROR - {str(e)}")
+            print(f"  Screener DB       : ERROR - {str(e)}")
         
-        # Test Corporate Announcements database
+        # Test Corporate Announcements database with record count
+        announcements_count = 0
         try:
-            import duckdb
-            import os
             data_dir = os.path.abspath(settings.DATA_DIR)
             db_dir = os.path.join(data_dir, "Company Fundamentals")
             db_path = os.path.join(db_dir, "corporate_announcements.duckdb")
             if os.path.exists(db_path):
                 test_conn = duckdb.connect(db_path)
+                try:
+                    result = test_conn.execute("SELECT COUNT(*) FROM corporate_announcements").fetchone()
+                    announcements_count = result[0] if result else 0
+                except:
+                    pass
                 test_conn.close()
-                print(f"[DATABASE] Corporate Announcements DB: CONNECTED - DuckDB")
+                print(f"  Announcements DB  : CONNECTED ({announcements_count} records) - DuckDB")
             else:
-                print(f"[DATABASE] Corporate Announcements DB: NOT INITIALIZED")
+                print(f"  Announcements DB  : NOT INITIALIZED")
         except Exception as e:
-            print(f"[DATABASE] Corporate Announcements DB: ERROR - {str(e)}")
+            print(f"  Announcements DB  : ERROR - {str(e)}")
         
-        print("="*60 + "\n")
+        # Test Symbols database with table and symbol count
+        symbols_table_count = 0
+        symbols_record_count = 0
+        try:
+            from app.api.v1.symbols import get_symbols_db_path, get_db_connection
+            symbols_db_path = get_symbols_db_path()
+            if os.path.exists(symbols_db_path):
+                symbols_conn = get_db_connection()
+                if symbols_conn:
+                    try:
+                        tables = symbols_conn.execute("SHOW TABLES").fetchall()
+                        symbols_table_count = len(tables)
+                        # Try to get symbol count
+                        try:
+                            result = symbols_conn.execute("SELECT COUNT(*) FROM symbols").fetchone()
+                            symbols_record_count = result[0] if result else 0
+                        except:
+                            pass
+                    except:
+                        pass
+                    symbols_conn.close()
+                    print(f"  Symbols DB        : CONNECTED ({symbols_table_count} tables, {symbols_record_count} symbols) - DuckDB")
+                else:
+                    print(f"  Symbols DB        : FAILED - Connection error")
+            else:
+                print(f"  Symbols DB        : NOT INITIALIZED")
+        except Exception as e:
+            print(f"  Symbols DB        : ERROR - {str(e)}")
         
-        # Ensure Super User exists
+        print("="*70)
+        
+        # ============================================
+        # USER/ADMIN STATUS
+        # ============================================
+        print("\n" + "="*70)
+        print(" USER STATUS")
+        print("="*70)
         try:
             db = auth_client.get_session()
             from app.models.user import User
-            from app.core.security import get_password_hash
-            from sqlalchemy import inspect
             
-            # Simple check for super user
             try:
                 all_users = db.query(User).all()
+                total_users = len(all_users)
+                active_users_count = len([u for u in all_users if u.is_active])
                 super_admins = [u for u in all_users if u.role and u.role.lower() == "super_admin"]
+                admins = [u for u in all_users if u.role and u.role.lower() == "admin"]
+                regular_users = [u for u in all_users if u.role and u.role.lower() == "user"]
+                
+                print(f"  Total Users       : {total_users}")
+                print(f"  Active Users      : {active_users_count}")
+                print(f"  Super Admins      : {len(super_admins)}")
+                print(f"  Admins            : {len(admins)}")
+                print(f"  Regular Users     : {len(regular_users)}")
                 
                 if not super_admins:
-                    print("[CRITICAL] No Super User found - creating default Super User")
-                    import uuid
-                    default_admin = User(
-                        user_id=str(uuid.uuid4()),
-                        username="admin",
-                        email="admin@rubikview.com",
-                        mobile="+10000000000",
-                        hashed_password=get_password_hash("admin123"),
-                        role="super_admin",
-                        is_active=True,
-                        theme_preference="dark"
-                    )
-                    db.add(default_admin)
-                    db.commit()
-                    print("[OK] Default Super User 'admin' created (password: admin123)")
-                else:
-                    print(f"[OK] {len(super_admins)} Super User(s) found.")
+                    print("\n  [WARNING] No Super User found!")
+                    print("            Run: python scripts/init/init_auth_database.py")
                     
             except Exception as e:
-                print(f"[WARNING] Could not verify Super User (Database might be initializing): {e}")
+                print(f"  [WARNING] Could not verify users: {e}")
                 
             db.close()
         except Exception as e:
-            print(f"[ERROR] Startup verification failed: {e}")
-        
-        # Symbols module has been removed
-        pass
+            print(f"  [ERROR] User check failed: {e}")
+        print("="*70)
         
         # ============================================
         # WEBSOCKET STATUS
         # ============================================
+        print("\n" + "="*70)
+        print(" WEBSOCKET STATUS")
+        print("="*70)
         try:
-            from app.core.websocket_manager import manager
+            from app.core.websocket_manager import manager as ws_manager
             import asyncio
             # Create background task for cleanup
             loop = asyncio.get_event_loop()
-            loop.create_task(manager.cleanup_stale_connections())
-            # Log WebSocket status once on startup
-            print(f"[WEBSOCKET] Service: READY (cleanup task started)")
+            loop.create_task(ws_manager.cleanup_stale_connections())
+            
+            print(f"  Service Status    : READY")
+            print(f"  Cleanup Task      : STARTED")
+            print(f"  Listening         : /api/v1/ws")
         except Exception as e:
-            print(f"[WEBSOCKET] Service: ERROR - {str(e)}")
+            print(f"  Service Status    : ERROR - {str(e)}")
+        print("="*70)
         
         # ============================================
         # SCHEDULER STATUS
         # ============================================
-        print("\n" + "="*60)
-        print("[SCHEDULER STATUS] Initializing schedulers...")
-        print("="*60)
+        print("\n" + "="*70)
+        print(" SCHEDULER STATUS")
+        print("="*70)
+        
+        now_utc = datetime.now(timezone.utc)
+        now_ist = now_utc.astimezone(IST)
+        print(f"  Current Time (IST): {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
+        print("-"*70)
         
         # Start TrueData token refresh scheduler
         try:
             from app.services.token_refresh_scheduler import start_token_refresh_scheduler, get_token_refresh_scheduler
             start_token_refresh_scheduler()
-            scheduler = get_token_refresh_scheduler()
-            status = "RUNNING" if scheduler.running else "STOPPED"
-            print(f"[SCHEDULER] TrueData Token Refresh: {status} (check interval: {scheduler.check_interval}s)")
+            token_scheduler = get_token_refresh_scheduler()
+            status = "RUNNING" if token_scheduler.running else "STOPPED"
+            
+            # Calculate next check time in IST
+            next_token_check = now_utc + timedelta(seconds=token_scheduler.check_interval)
+            next_token_check_ist = next_token_check.astimezone(IST)
+            
+            print(f"  Token Refresh     : {status}")
+            print(f"    Check Interval  : {token_scheduler.check_interval}s")
+            print(f"    Next Check (IST): {next_token_check_ist.strftime('%H:%M:%S')}")
         except Exception as e:
-            print(f"[SCHEDULER] TrueData Token Refresh: ERROR - {str(e)}")
+            print(f"  Token Refresh     : ERROR - {str(e)}")
+        
+        print("-"*70)
         
         # Initialize Screener Database and reset stale "Running" statuses
         try:
@@ -173,7 +243,6 @@ async def startup_event():
             
             # Reset any connections that are still marked as "Running" (stale status from previous backend run)
             try:
-                from datetime import datetime, timezone
                 result = conn.execute("""
                     SELECT COUNT(*) FROM screener_connections WHERE status = 'Running'
                 """).fetchone()
@@ -189,16 +258,13 @@ async def startup_event():
                 
                 conn.close()
             except Exception as reset_error:
-                print(f"[WARNING] Could not reset stale screener connection statuses: {reset_error}")
                 if conn:
                     try:
                         conn.close()
                     except:
                         pass
-            
-            print("[OK] Screener database initialized with default connection")
         except Exception as e:
-            print(f"[WARNING] Could not initialize Screener database: {e}")
+            pass  # Silent - already logged in database status section
         
         # Initialize Corporate Announcements Database
         try:
@@ -242,23 +308,69 @@ async def startup_event():
             """)
             
             conn.close()
-            print(f"[OK] Corporate announcements database initialized: {db_path}")
         except Exception as e:
             print(f"[WARNING] Could not initialize corporate announcements database: {e}")
         
         # Start Symbol Scheduler Service
         try:
             from app.services.scheduler_service import get_scheduler_service
+            from app.api.v1.symbols import get_db_connection as get_symbols_db_connection
             scheduler_service = get_scheduler_service()
             scheduler_service.start()
             status = "RUNNING" if scheduler_service.running else "STOPPED"
             active_count = len(scheduler_service._active_executions) if hasattr(scheduler_service, '_active_executions') else 0
-            print(f"[SCHEDULER] Symbol Auto-Upload: {status} (check interval: {scheduler_service.check_interval}s, active: {active_count})")
+            queue_size = scheduler_service.scheduler_queue.qsize() if hasattr(scheduler_service, 'scheduler_queue') else 0
+            
+            # Calculate next check time in IST
+            next_symbol_check = now_utc + timedelta(seconds=scheduler_service.check_interval)
+            next_symbol_check_ist = next_symbol_check.astimezone(IST)
+            
+            # Get active scheduler count and next scheduled run from database
+            active_schedulers = 0
+            next_scheduled_run = None
+            try:
+                sched_conn = get_symbols_db_connection()
+                if sched_conn:
+                    result = sched_conn.execute("SELECT COUNT(*) FROM schedulers WHERE is_active = TRUE").fetchone()
+                    active_schedulers = result[0] if result else 0
+                    
+                    # Get next scheduled run
+                    next_run_result = sched_conn.execute("""
+                        SELECT name, next_run_at FROM schedulers 
+                        WHERE is_active = TRUE AND next_run_at IS NOT NULL 
+                        ORDER BY next_run_at ASC LIMIT 1
+                    """).fetchone()
+                    if next_run_result:
+                        next_scheduled_run = next_run_result
+                    sched_conn.close()
+            except:
+                pass
+            
+            print(f"  Symbol Auto-Upload: {status}")
+            print(f"    Check Interval  : {scheduler_service.check_interval}s")
+            print(f"    Next Check (IST): {next_symbol_check_ist.strftime('%H:%M:%S')}")
+            print(f"    Active Schedulers: {active_schedulers}")
+            print(f"    Queue Size      : {queue_size}")
+            
+            if next_scheduled_run:
+                sched_name = next_scheduled_run[0]
+                next_run_at = next_scheduled_run[1]
+                if next_run_at:
+                    # Ensure timezone aware
+                    if next_run_at.tzinfo is None:
+                        next_run_at = next_run_at.replace(tzinfo=timezone.utc)
+                    next_run_ist = next_run_at.astimezone(IST)
+                    print(f"    Next Run        : '{sched_name}' at {next_run_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
         except Exception as e:
-            print(f"[SCHEDULER] Symbol Auto-Upload: ERROR - {str(e)}")
+            print(f"  Symbol Auto-Upload: ERROR - {str(e)}")
         
-        print("="*60 + "\n")
+        print("="*70)
         
+        # Final startup message
+        print("\n" + "="*70)
+        print(" RUBIK ANALYTICS API - READY")
+        print(f" Started at: {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
+        print("="*70 + "\n")
 
     except Exception as e:
         print(f"[ERROR] Startup error: {e}")

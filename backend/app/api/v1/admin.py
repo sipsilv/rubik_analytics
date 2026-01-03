@@ -17,7 +17,7 @@ from app.schemas.admin import (
     FeatureRequestResponse, FeatureRequestUpdate
 )
 from pydantic import BaseModel
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy import or_
 import secrets
@@ -162,7 +162,6 @@ async def get_users(
     users = query.order_by(User.created_at.desc()).all()
     
     # Calculate is_online for each user
-    from datetime import timezone
     now = datetime.now(timezone.utc)
     online_threshold = timedelta(minutes=5)
     
@@ -217,7 +216,6 @@ async def get_user(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Calculate is_online
-    from datetime import timezone
     now = datetime.now(timezone.utc)
     online_threshold = timedelta(minutes=5)
     

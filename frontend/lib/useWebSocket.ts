@@ -37,15 +37,27 @@ export function useWebSocketStatus(
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectAttemptsRef = useRef(0)
+  const isConnectingRef = useRef(false)
   const maxReconnectAttempts = 5
   const reconnectDelay = 3000 // 3 seconds
+  
+  // Use ref for callback to avoid dependency issues
+  const onStatusUpdateRef = useRef(onStatusUpdate)
+  onStatusUpdateRef.current = onStatusUpdate
 
   const connect = useCallback(() => {
+    // Prevent multiple simultaneous connection attempts
+    if (isConnectingRef.current) {
+      return
+    }
+    
     // Don't connect if already connected or no auth token
     const token = Cookies.get('auth_token')
     if (!token || wsRef.current?.readyState === WebSocket.OPEN) {
       return
     }
+
+    isConnectingRef.current = true
 
     try {
       const wsUrl = getWebSocketUrl()
@@ -53,6 +65,7 @@ export function useWebSocketStatus(
 
       ws.onopen = () => {
         console.log('[WebSocket] Connected')
+        isConnectingRef.current = false
         setIsConnected(true)
         setError(null)
         reconnectAttemptsRef.current = 0
@@ -69,7 +82,7 @@ export function useWebSocketStatus(
               is_online: data.is_online ?? data.isOnline ?? false,
               last_active_at: data.last_active_at || data.lastActiveAt || null,
             }
-            onStatusUpdate?.(update)
+            onStatusUpdateRef.current?.(update)
           }
         } catch (err) {
           console.warn('[WebSocket] Failed to parse message:', err)
@@ -78,12 +91,13 @@ export function useWebSocketStatus(
 
       ws.onerror = (err) => {
         console.warn('[WebSocket] Error:', err)
+        isConnectingRef.current = false
         setError(new Error('WebSocket connection error'))
-        setIsConnected(false)
       }
 
       ws.onclose = () => {
         console.log('[WebSocket] Disconnected')
+        isConnectingRef.current = false
         setIsConnected(false)
         wsRef.current = null
 
@@ -105,10 +119,10 @@ export function useWebSocketStatus(
       wsRef.current = ws
     } catch (err) {
       console.warn('[WebSocket] Failed to create connection:', err)
+      isConnectingRef.current = false
       setError(err instanceof Error ? err : new Error('Failed to create WebSocket'))
-      setIsConnected(false)
     }
-  }, [onStatusUpdate])
+  }, []) // No dependencies - uses refs for mutable values
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -119,11 +133,12 @@ export function useWebSocketStatus(
       wsRef.current.close()
       wsRef.current = null
     }
+    isConnectingRef.current = false
     setIsConnected(false)
   }, [])
 
+  // Initial connection effect - runs once on mount
   useEffect(() => {
-    // Only connect if we have an auth token
     const token = Cookies.get('auth_token')
     if (token) {
       connect()
@@ -132,27 +147,32 @@ export function useWebSocketStatus(
     return () => {
       disconnect()
     }
-  }, [connect, disconnect])
+  }, []) // Empty deps - only run on mount/unmount
 
-  // Reconnect when auth state changes
+  // Periodic auth check - separate from connection logic
   useEffect(() => {
-    const checkAuth = () => {
+    const interval = setInterval(() => {
       const token = Cookies.get('auth_token')
-      if (token && !isConnected && !wsRef.current) {
+      const wsState = wsRef.current?.readyState
+      
+      // Connect if we have token but no connection
+      if (token && !wsRef.current && !isConnectingRef.current) {
         connect()
-      } else if (!token && wsRef.current) {
+      }
+      // Disconnect if no token but have connection
+      else if (!token && wsRef.current) {
         disconnect()
       }
-    }
-    
-    // Check immediately
-    checkAuth()
-    
-    // Set up interval to check auth token changes
-    const interval = setInterval(checkAuth, 1000)
+      // Reconnect if connection is closed/closing and we still have token
+      else if (token && wsState !== WebSocket.OPEN && wsState !== WebSocket.CONNECTING && !isConnectingRef.current) {
+        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+          connect()
+        }
+      }
+    }, 5000) // Check every 5 seconds instead of 1 second
     
     return () => clearInterval(interval)
-  }, [isConnected, connect, disconnect])
+  }, [connect, disconnect])
 
   return { isConnected, error }
 }
