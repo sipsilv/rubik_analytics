@@ -33,6 +33,7 @@ jobs:
         run: |
           docker build \
             -f server/docker/frontend.Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL=https://api.rubikanalytics.net \
             -t ghcr.io/${{ github.actor }}/rubik-frontend:latest \
             .
           docker push ghcr.io/${{ github.actor }}/rubik-frontend:latest
