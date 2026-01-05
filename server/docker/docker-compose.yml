@@ -61,7 +61,6 @@ services:
       - "${FRONTEND_PORT}:3000"
     environment:
       # API URL - use backend container name for inter-container communication
-      - NEXT_PUBLIC_API_URL=https://api.rubikanalytics.net
       # For browser requests, this should be the external URL
       - NODE_ENV=production
       - TZ=${TZ:-Asia/Kolkata}
