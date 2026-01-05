@@ -1,32 +1,54 @@
-FROM node:20-alpine
+FROM node:18-bookworm-slim AS base
 
+# ---------------- deps ----------------
+FROM base AS deps
 WORKDIR /app
 
-# Install system dependencies
-RUN apk add --no-cache libc6-compat wget tzdata
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
-# Set timezone
-ENV TZ=Asia/Kolkata
-
-# Copy package files
 COPY frontend/package.json frontend/package-lock.json* ./
 
 # Install dependencies
 RUN npm ci
 
-# Copy source
+
+# ---------------- builder ----------------
+FROM base AS builder
+WORKDIR /app
+
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/ ./
 
-# Development environment
-ENV NODE_ENV=development
+RUN npm run build
+
+
+# ---------------- runner ----------------
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
+ENV HOSTNAME=0.0.0.0
+
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser  --system --uid 1001 nextjs
+
+# Standalone output (NOW THESE PATHS EXIST)
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+USER nextjs
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 
-# Start in development mode
-CMD ["npm", "run", "dev"]
+CMD ["node", "server.js"]
