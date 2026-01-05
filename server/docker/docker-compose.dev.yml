@@ -57,12 +57,14 @@ services:
     build:
       context: ../..
       dockerfile: server/docker/frontend.Dockerfile
+      build:
+        args:
+          NEXT_PUBLIC_API_URL: https://api.rubikanalytics.net
     container_name: rubik-frontend-dev
     ports:
       - "3000:3000"
     environment:
       # API URL - use backend container name for inter-container communication
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       - NODE_ENV=development
     depends_on:
       backend:

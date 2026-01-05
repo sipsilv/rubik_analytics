@@ -22,7 +22,7 @@ services:
       # Generate new key: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-jT7ACJPNHdp-IwKWVDto-vohgPGxwP_95sjBlgsr9Eg=}
       # CORS - allow frontend container and localhost
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000,http://rubik-frontend:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000,http://rubik-frontend:3000, https://rubikanalytics.net, https://www.rubikanalytics.net}
       # TrueData Connection Defaults (configurable via environment variables)
       # These defaults are used when creating new TrueData connections if URL/port are not specified
       # Can be overridden by setting environment variables or editing connection in UI
@@ -46,13 +46,15 @@ services:
     build:
       context: ../..
       dockerfile: server/docker/frontend.Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=https://api.rubikanalytics.net
+
     container_name: rubik-frontend
     ports:
       - "3000:3000"
     environment:
       # API URL - use backend container name for inter-container communication
       # For browser requests, this should be the external URL
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       - NODE_ENV=production
     depends_on:
       backend:

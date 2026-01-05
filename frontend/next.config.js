@@ -1,10 +1,13 @@
 /** @type {import('next').NextConfig} */
+const path = require('path')
+
 const nextConfig = {
   reactStrictMode: true,
-  // Removed standalone output - using standard production build
+
   experimental: {
-    outputFileTracingRoot: require('path').join(__dirname, '../../'),
-  },
+    outputFileTracingRoot: path.join(__dirname, '../../'),
+  }
 }
 
 module.exports = nextConfig
+

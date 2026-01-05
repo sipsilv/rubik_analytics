@@ -12,7 +12,12 @@ RUN apt-get update && apt-get install -y \
 COPY backend/requirements.txt ./requirements.txt
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install \
+    --no-cache-dir \
+    --default-timeout=120 \
+    --retries=5 \
+    -r requirements.txt
+
 
 # Install dos2unix to fix Windows CRLF issues
 RUN apt-get update && apt-get install -y dos2unix && rm -rf /var/lib/apt/lists/*
