@@ -1,0 +1,35 @@
+name: Deploy the server via cloudflare tunnel
+
+on:
+  push:
+    branches : [ main ]
+
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name : Checkout code
+        uses: actions/checkout@v4
+
+      - name: install cloudflare
+        run: |
+          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+            -o cloudflared
+          chmod +x cloudflared
+          sudo mv cloudflared /usr/local/bin/cloudflared
+
+      - name: Authenticate Cloudflare Tunnel
+        run: |
+          cloudflared tunnel login --token "${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}"
+
+      - name: Deploy to home server
+        run: |
+          cloudflared access ssh \
+            --hostname ${{ secrets.SERVER_HOST }} \
+            --user ${{ secrets.SERVER_USER }} << 'EOF'
+              cd ~/YOUR_PROJECT_FOLDER
+              docker compose pull
+              docker compose up -d
+          EOF
