@@ -60,7 +60,10 @@ services:
     ports:
       - "${FRONTEND_PORT}:3000"
     environment:
-      NODE_ENV: ${NODE_ENV}
+      # API URL - use backend container name for inter-container communication
+      # For browser requests, this should be the external URL
+      - NODE_ENV=production
+      - TZ=${TZ:-Asia/Kolkata}
     depends_on:
       backend:
         condition: service_healthy
