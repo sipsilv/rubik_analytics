@@ -1,21 +1,27 @@
-FROM node:20-alpine
+FROM node:18-bookworm-slim AS base
 
+# Install dependencies only when needed
+FROM base AS deps
 WORKDIR /app
 
-# Install system dependencies
-RUN apk add --no-cache libc6-compat wget tzdata
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
-# Set timezone
-ENV TZ=Asia/Kolkata
-
-# Copy package files
 COPY frontend/package.json frontend/package-lock.json* ./
 
 # Install dependencies
 RUN npm ci
 
-# Copy source
-COPY frontend/ ./
+# Rebuild the source code only when needed
+FROM base AS builder
+WORKDIR /app
+
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY frontend/ ./frontend/
+WORKDIR /app/frontend
 
 # Development environment
 ENV NODE_ENV=development

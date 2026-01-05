@@ -236,7 +236,7 @@ final_df = df`)
             if (!health.healthy) {
                 // Only show error if it's a network/unreachable error
                 if (health.error?.includes('not reachable')) {
-                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+                    const apiUrl = process.env.NEXT_PUBLIC_API_URL
                     setError(`Backend server is not reachable. Please ensure the backend is running at ${apiUrl}.`)
                 } else {
                     // Backend is reachable but health check failed for other reasons
@@ -262,7 +262,7 @@ final_df = df`)
             setBackendHealthy(!isUnreachable)
 
             if (isUnreachable) {
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL
                 setError(`Unable to connect to backend server at ${apiUrl}. Please ensure the backend is running.`)
             }
             console.error('Backend health check failed:', e)
