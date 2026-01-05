@@ -1,15 +1,14 @@
-# ---------------- base ----------------
 FROM node:18-bookworm-slim AS base
 
 # ---------------- deps ----------------
 FROM base AS deps
 WORKDIR /app
 
-# Install system dependencies (Debian uses apt, NOT apk)
-RUN apt-get update && apt-get install -y \
-    wget \
-    libc6 \
- && rm -rf /var/lib/apt/lists/*
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci --prefer-offline --no-audit
 
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
@@ -26,6 +25,18 @@ WORKDIR /app
 
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY frontend/ ./frontend/
+WORKDIR /app/frontend
+
+# Copy node_modules from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy frontend source code
+COPY frontend/ ./
+
+# Set environment for build
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules
