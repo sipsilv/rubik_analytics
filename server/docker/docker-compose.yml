@@ -7,9 +7,7 @@ version: '3.8'
 
 services:
   backend:
-    build:
-      context: ../..
-      dockerfile: server/docker/backend.Dockerfile
+    image: ghcr.io/sipsilv/rubik-backend:latest
     container_name: rubik-backend
     ports:
       - "8000:8000"
@@ -68,17 +66,13 @@ services:
           memory: 512M
 
   frontend:
-    build:
-      context: ../..
-      dockerfile: server/docker/frontend.Dockerfile
-      args:
-        - NEXT_PUBLIC_API_URL=https://api.rubikanalytics.net
-
+    image: ghcr.io/sipsilv/rubik-frontend:latest
     container_name: rubik-frontend
     ports:
       - "3000:3000"
     environment:
       # API URL - use backend container name for inter-container communication
+      - NEXT_PUBLIC_API_URL=https://api.rubikanalytics.net
       # For browser requests, this should be the external URL
       - NODE_ENV=production
     depends_on:
@@ -106,6 +100,14 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 60
+    restart: unless-stopped
 
 networks:
   rubik-network:
