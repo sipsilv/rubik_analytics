@@ -2,7 +2,9 @@
 
 ## Overview
 
-The Corporate Announcements feature provides real-time ingestion and display of corporate announcements from TrueData via WebSocket, with storage in DuckDB and a REST API fallback mechanism.
+The Corporate Announcements feature provides real-time ingestion and display of corporate announcements from TrueData via WebSocket, with storage in DuckDB and a REST API fallback mechanism. The system automatically filters duplicates, blank entries, and matches symbols with company names from the symbols database.
+
+**Last Updated**: January 2026
 
 ## Architecture
 
@@ -88,6 +90,33 @@ CREATE TABLE corporate_announcements (
 - **Path**: `{DATA_DIR}/Company Fundamentals/corporate_announcements.duckdb`
 - Created automatically on first use
 
+## Frontend Features
+
+### Dashboard Integration
+
+The Corporate Announcements are displayed in the Dashboard under the "Latest Corporate Announcements" tab.
+
+**Features:**
+- **Live Updates**: Automatically polls for new announcements every 10 seconds (when on page 1, no search)
+- **Search Functionality**: Search by symbol, company name, headline, or description
+- **Pagination**: Navigate through announcements with configurable page size (10, 25, 50, 100)
+- **Real-time Indicators**: Shows "Live" status and new announcement count
+- **Attachment Downloads**: Click download icon to fetch and download PDF attachments
+- **Expandable Rows**: Click chevron to expand and view full description
+
+**Search Fields:**
+- Symbol (NSE/BSE)
+- Company Name (from symbols database)
+- Headline
+- Description
+
+**UI Components:**
+- Search input with Search and Clear buttons
+- Loading spinner during data fetch
+- Empty state messages
+- Pagination controls
+- Last update timestamp
+
 ## API Endpoints
 
 ### Get Announcements
@@ -97,9 +126,15 @@ GET /api/v1/announcements?limit=25&offset=0&search=<query>
 ```
 
 **Parameters:**
-- `limit` (default: 100, max: 1000): Number of results
-- `offset` (default: 0): Pagination offset
-- `search` (optional): Search in symbol, company name, or headline
+- `limit` (default: 100, max: 1000): Number of results per page
+- `offset` (default: 0): Pagination offset (for page navigation)
+- `search` (optional): Search term - searches in symbol, company name, headline, and description
+
+**Search Behavior:**
+- Case-insensitive search
+- Partial matching (LIKE query)
+- Searches across multiple fields simultaneously
+- Returns DISTINCT results to prevent duplicates
 
 **Response:**
 ```json
@@ -177,9 +212,12 @@ The system automatically filters out:
 
 ### Duplicate Detection
 
-- Duplicates are detected by `announcement_id`
+- **Database Level**: `UNIQUE(announcement_id)` constraint prevents duplicates
+- **Application Level**: Check performed before insert for efficiency
+- **API Level**: `SELECT DISTINCT` ensures no duplicates in query results
+- **Insert Strategy**: Uses `INSERT OR IGNORE` to handle race conditions
 - If duplicate found, the message is skipped (no insertion)
-- Check is performed before database write for efficiency
+- Duplicate count is logged for monitoring
 
 ## Symbol Extraction
 
@@ -190,12 +228,20 @@ The parser tries multiple methods to extract symbols:
 3. **Exchange Inference**: Uses `exchange` field to determine NSE vs BSE
 4. **Headline Extraction**: Regex pattern matching for symbol codes in headlines
 
-### Company Name Resolution
+### Symbol Matching and Company Name Resolution
 
-Company names are resolved by joining with the symbols database:
+**Automatic Symbol Matching:**
+- When an announcement arrives without symbols, the system attempts to match it with the symbols database
+- Matching is done by searching for company names in the announcement headline/description
+- Only matches equity instruments (EQ) to avoid matching options/futures
+- Updates the announcement with matched symbols before insertion
+
+**Company Name Resolution:**
+- Company names are resolved by joining with the symbols database
 - Joins on `symbol_nse` or `symbol_bse` matching `trading_symbol`
 - Requires symbols database to be attached
 - Falls back to NULL if no match found
+- Uses `COALESCE` to show best available company name (NSE first, then BSE)
 
 ## REST API Fallback
 
@@ -251,21 +297,37 @@ python scripts/maintenance/clean_announcements.py
 ```
 
 **Actions:**
-- Removes blank entries (no headline/description)
-- Removes duplicate entries (keeps earliest)
+- Removes blank entries (no headline/description or invalid headlines)
+- Removes duplicate entries (keeps earliest `received_at`)
 - Shows before/after statistics
+- Safe to run multiple times
 
-### Check Announcements
+**Example Output:**
+```
+Total announcements before cleanup: 2408
+Found 0 blank entries
+Found 0 announcement_ids with duplicates (0 extra copies)
+
+[OK] No cleanup needed - database is clean!
+```
+
+### Associate Symbols to Announcements
 
 ```bash
 cd backend
-python scripts/maintenance/check_announcements.py
+python scripts/maintenance/associate_symbols_to_announcements.py
 ```
 
 **Actions:**
-- Shows database statistics
-- Lists recent announcements
-- Checks for issues
+- Backfills missing symbols for existing announcements
+- Matches by company name in headline/description/raw_payload
+- Updates announcements with matched symbols
+- Shows progress and statistics
+
+**Use Case:**
+- Run after adding new symbols to the symbols database
+- Fix announcements that arrived before symbol matching was implemented
+- Update announcements that couldn't be matched initially
 
 ## Monitoring
 
@@ -292,12 +354,50 @@ Use `/api/v1/announcements/status` to monitor:
 4. **Symbol Database**: Keep symbols database updated for company name resolution
 5. **Connection Health**: Monitor connection status and auto-reconnect behavior
 
+## User Interface
+
+### Dashboard Page
+
+**Location**: Dashboard → "Latest Corporate Announcements" tab
+
+**Features:**
+1. **Search Bar**
+   - Search by symbol, company name, headline, or description
+   - Enter key to search
+   - Clear button to reset search
+   - Real-time search with proper loading states
+
+2. **Announcements Table**
+   - Date & Time: Shows announcement date/time and received time
+   - Company: Company name from symbols database (or "-" if not found)
+   - Symbol: Trading symbol (NSE/BSE format)
+   - Headline: Announcement headline
+   - Category: Announcement category
+   - Actions: Expand/collapse description, download attachment
+
+3. **Pagination**
+   - Page size selector (10, 25, 50, 100)
+   - Page navigation with ellipsis
+   - Shows current range and total count
+
+4. **Live Updates**
+   - Automatic polling every 10 seconds (when on page 1, no search)
+   - Shows "Live" indicator with pulsing dot
+   - Displays count of new announcements
+   - Last update timestamp
+
+5. **Loading States**
+   - Spinner during data fetch
+   - Disabled buttons during loading
+   - Clear error messages
+
 ## Limitations
 
 1. **Symbol Extraction**: May not always extract symbols if not in message format
 2. **Company Names**: Requires symbols database with matching trading_symbols
 3. **REST Fallback**: Only triggers when symbol parameter provided and no data exists
 4. **WebSocket**: Requires persistent connection - reconnects automatically on failure
+5. **Search**: Case-insensitive partial matching - exact matches may be needed for some symbols
 
 ## Related Documentation
 

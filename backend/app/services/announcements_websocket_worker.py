@@ -252,6 +252,10 @@ class AnnouncementsWebSocketWorker:
             if self._logged_message_count < 5:
                 logger.info(f"Sample WebSocket message structure (full): {json.dumps(data, indent=2)}")
                 logger.info(f"Message keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}")
+                # Also print to console for visibility
+                print(f"\n[WEBSOCKET MESSAGE] Sample message structure:")
+                print(json.dumps(data, indent=2)[:1000])  # First 1000 chars
+                print(f"Message keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}\n")
                 self._logged_message_count += 1
             
             # Try multiple possible ID fields

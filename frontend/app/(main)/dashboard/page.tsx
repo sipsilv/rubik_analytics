@@ -43,32 +43,156 @@ export default function DashboardPage() {
   
   // Expanded rows state
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  
+  // Live update state
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null)
+  const [newAnnouncementsCount, setNewAnnouncementsCount] = useState(0)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const lastAnnouncementIdRef = useRef<string | null>(null)
+  const fetchAnnouncementsRef = useRef<typeof fetchAnnouncements | null>(null)
 
   // Fetch announcements from DuckDB
-  const fetchAnnouncements = useCallback(async (currentPage: number = page, currentPageSize: number = pageSize, searchTerm?: string) => {
-    setLoading(true)
+  const fetchAnnouncements = useCallback(async (currentPage: number = page, currentPageSize: number = pageSize, searchTerm?: string, silent: boolean = false) => {
+    if (!silent) {
+      setLoading(true)
+    }
     try {
       const offset = (currentPage - 1) * currentPageSize
-      const response = await announcementsAPI.getAnnouncements(currentPageSize, offset, searchTerm || searchQuery)
-      setAnnouncements(response.announcements || [])
+      // Use searchTerm if provided, otherwise use searchQuery state
+      // Only pass non-empty strings to the API
+      // If searchTerm is explicitly undefined, it means clear search - use undefined
+      // If searchTerm is a string (even empty), use it
+      // Otherwise fall back to searchQuery state
+      let effectiveSearchTerm: string | undefined
+      if (searchTerm !== undefined) {
+        // searchTerm was explicitly passed - if it's empty string or falsy, convert to undefined
+        // This handles the case when clear button passes '' to explicitly clear
+        effectiveSearchTerm = searchTerm && searchTerm.trim() ? searchTerm.trim() : undefined
+      } else {
+        // Use searchQuery from state (fallback)
+        effectiveSearchTerm = searchQuery && searchQuery.trim() ? searchQuery.trim() : undefined
+      }
+      
+      console.log('[Announcements] Fetching:', { 
+        page: currentPage, 
+        pageSize: currentPageSize, 
+        offset, 
+        search: effectiveSearchTerm,
+        searchQuery,
+        searchTerm 
+      })
+      
+      const response = await announcementsAPI.getAnnouncements(currentPageSize, offset, effectiveSearchTerm)
+      const newAnnouncements = response.announcements || []
+      
+      console.log('[Announcements] Response:', { 
+        count: newAnnouncements.length, 
+        total: response.total,
+        hasData: newAnnouncements.length > 0
+      })
+      
+      // Debug: Log sample data to check symbols and company names
+      if (newAnnouncements.length > 0) {
+        console.log('[Announcements] Sample announcement:', {
+          announcement_id: newAnnouncements[0].announcement_id,
+          symbol_nse: newAnnouncements[0].symbol_nse,
+          symbol_bse: newAnnouncements[0].symbol_bse,
+          symbol: newAnnouncements[0].symbol,
+          company_name: newAnnouncements[0].company_name,
+          attachment_id: newAnnouncements[0].attachment_id,
+          headline: newAnnouncements[0].headline?.substring(0, 50)
+        })
+      }
+      
+      // Check for new announcements (only on first page and when not searching)
+      if (currentPage === 1 && !effectiveSearchTerm && newAnnouncements.length > 0) {
+        const latestId = newAnnouncements[0].announcement_id
+        if (lastAnnouncementIdRef.current && lastAnnouncementIdRef.current !== latestId) {
+          // Count new announcements by finding where the last known ID appears
+          const lastKnownIndex = newAnnouncements.findIndex(a => a.announcement_id === lastAnnouncementIdRef.current)
+          if (lastKnownIndex > 0) {
+            // New announcements found - update count and show notification
+            setNewAnnouncementsCount(lastKnownIndex)
+            // Clear notification after 3 seconds
+            setTimeout(() => {
+              setNewAnnouncementsCount(0)
+            }, 3000)
+          }
+        } else if (!lastAnnouncementIdRef.current) {
+          // First load - just set the reference
+          lastAnnouncementIdRef.current = latestId
+        }
+      }
+      
+      // Update the reference if we're on first page without search
+      if (currentPage === 1 && !effectiveSearchTerm && newAnnouncements.length > 0 && !lastAnnouncementIdRef.current) {
+        lastAnnouncementIdRef.current = newAnnouncements[0].announcement_id
+      }
+      
+      setAnnouncements(newAnnouncements)
       setTotal(response.total || 0)
       setTotalPages(Math.ceil((response.total || 0) / currentPageSize))
-    } catch (error) {
-      console.error('Error fetching announcements:', error)
-      setAnnouncements([])
-      setTotal(0)
-      setTotalPages(1)
+      setLastUpdateTime(new Date())
+    } catch (error: any) {
+      console.error('[Announcements] Error fetching:', error)
+      console.error('[Announcements] Error details:', {
+        message: error?.message,
+        response: error?.response?.data,
+        status: error?.response?.status
+      })
+      if (!silent) {
+        setAnnouncements([])
+        setTotal(0)
+        setTotalPages(1)
+      }
     } finally {
-      setLoading(false)
+      if (!silent) {
+        setLoading(false)
+      }
     }
   }, [page, pageSize, searchQuery])
+  
+  // Keep ref updated with latest fetch function
+  useEffect(() => {
+    fetchAnnouncementsRef.current = fetchAnnouncements
+  }, [fetchAnnouncements])
 
   // Initial load when announcements tab is active
   useEffect(() => {
     if (activeTab === 'announcements') {
+      // Reset search when switching to announcements tab
+      setSearch('')
+      setSearchQuery('')
+      setPage(1)
       fetchAnnouncements(1, pageSize)
     }
   }, [activeTab])
+
+  // Live polling for new announcements (only when on first page and not searching)
+  useEffect(() => {
+    // Clear any existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+      pollingIntervalRef.current = null
+    }
+    
+    // Start polling only when on announcements tab, first page, and no search
+    if (activeTab === 'announcements' && page === 1 && !searchQuery) {
+      // Poll every 10 seconds for new announcements
+      pollingIntervalRef.current = setInterval(() => {
+        if (fetchAnnouncementsRef.current) {
+          fetchAnnouncementsRef.current(1, pageSize, undefined, true) // Silent fetch
+        }
+      }, 10000) // 10 seconds
+      
+      return () => {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+      }
+    }
+  }, [activeTab, page, searchQuery, pageSize]) // Removed fetchAnnouncements from deps to avoid restart
 
   // Handle search
   const handleSearchChange = (val: string) => {
@@ -76,16 +200,29 @@ export default function DashboardPage() {
   }
 
   const handleSearchClick = () => {
-    setSearchQuery(search)
+    const searchValue = search.trim()
+    if (searchValue === searchQuery) {
+      // Already searching for this term, just refresh
+      fetchAnnouncements(page, pageSize, searchValue || undefined)
+      return
+    }
+    setSearchQuery(searchValue)
     setPage(1)
-    fetchAnnouncements(1, pageSize, search)
+    // Pass undefined if empty, otherwise pass the search value
+    fetchAnnouncements(1, pageSize, searchValue || undefined, false)
   }
 
   const handleClearSearch = () => {
+    // Clear all search-related state immediately
     setSearch('')
     setSearchQuery('')
     setPage(1)
-    fetchAnnouncements(1, pageSize, '')
+    // Reset the last announcement ID reference when clearing search
+    lastAnnouncementIdRef.current = null
+    
+    // Force fetch with empty string - this will be converted to undefined in fetchAnnouncements
+    // We pass empty string explicitly to override any stale searchQuery in the closure
+    fetchAnnouncements(1, pageSize, '', false)
   }
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -98,11 +235,37 @@ export default function DashboardPage() {
   // Handle attachment download
   const handleDownloadAttachment = async (announcementId: string) => {
     try {
-      const blob = await announcementsAPI.downloadAttachment(announcementId)
+      const response = await announcementsAPI.downloadAttachment(announcementId)
+      
+      // Extract filename from Content-Disposition header if available
+      let filename = `announcement_${announcementId}.pdf`
+      try {
+        // Axios normalizes headers to lowercase
+        const disposition = response.headers?.['content-disposition'] || response.headers?.['Content-Disposition']
+        if (disposition) {
+          // Try to extract filename from Content-Disposition header
+          // Format: attachment; filename="filename.pdf" or attachment; filename=filename.pdf
+          const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+          if (filenameMatch && filenameMatch[1]) {
+            filename = filenameMatch[1].replace(/['"]/g, '').trim()
+            // Decode URI if needed
+            try {
+              filename = decodeURIComponent(filename)
+            } catch {
+              // If decoding fails, use as-is
+            }
+          }
+        }
+      } catch (headerError) {
+        // If header parsing fails, use default filename
+        console.debug('Could not parse filename from headers:', headerError)
+      }
+      
+      const blob = response.data instanceof Blob ? response.data : new Blob([response.data])
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `announcement_${announcementId}.pdf`
+      a.download = filename
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -351,61 +514,96 @@ export default function DashboardPage() {
         <div className="space-y-4">
           {/* Header with Refresh Button */}
           <div className="flex items-center justify-between">
-            <div>
+            <div className="flex items-center gap-3">
               <h2 className="text-lg font-sans font-semibold text-text-primary">
                 Latest Corporate Announcements
               </h2>
+              {lastUpdateTime && (
+                <span className="text-xs text-text-secondary">
+                  Updated {lastUpdateTime.toLocaleTimeString()}
+                </span>
+              )}
+              {newAnnouncementsCount > 0 && (
+                <span className="px-2 py-1 text-xs font-medium bg-success/20 text-success rounded-full animate-pulse">
+                  {newAnnouncementsCount} new
+                </span>
+              )}
             </div>
-            <RefreshButton
-              variant="secondary"
-              onClick={async () => {
-                await fetchAnnouncements(page, pageSize, searchQuery)
-              }}
-              size="sm"
-              disabled={loading}
-            />
+            <div className="flex items-center gap-2">
+              {page === 1 && !searchQuery && (
+                <span className="text-xs text-text-secondary flex items-center gap-1">
+                  <span className="w-2 h-2 bg-success rounded-full animate-pulse"></span>
+                  Live
+                </span>
+              )}
+              <RefreshButton
+                variant="secondary"
+                onClick={async () => {
+                  await fetchAnnouncements(page, pageSize, searchQuery)
+                }}
+                size="sm"
+                disabled={loading}
+              />
+            </div>
           </div>
 
           {/* Search Box */}
           <div className="flex items-center gap-2">
-            <div className="relative flex-1 max-w-md">
+            <div className="flex-1 max-w-md">
               <Input
                 type="text"
                 placeholder="Search by symbol, company name, or headline..."
                 value={search}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                className="pl-10 pr-10"
+                className="h-9"
               />
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary" />
-              {search && (
-                <button
-                  onClick={handleClearSearch}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-secondary hover:text-text-primary"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
             </div>
             <Button
-              variant="secondary"
+              variant="primary"
               size="sm"
               onClick={handleSearchClick}
               disabled={loading}
+              className="h-9 px-4 flex-shrink-0"
             >
+              <Search className="w-4 h-4 mr-1.5" />
               Search
             </Button>
+            {search && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearSearch}
+                disabled={loading}
+                className="h-9 px-3 flex-shrink-0"
+              >
+                <X className="w-4 h-4 mr-1.5" />
+                Clear
+              </Button>
+            )}
           </div>
 
           <Card compact>
-            {loading && announcements.length === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <RefreshCw className="w-6 h-6 animate-spin text-text-secondary" />
-                <span className="ml-2 text-sm text-text-secondary">Loading announcements...</span>
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw className="w-6 h-6 animate-spin text-primary" />
+                <span className="ml-3 text-sm font-medium text-text-primary">Loading announcements...</span>
               </div>
             ) : announcements.length === 0 ? (
-              <div className="text-center py-8 text-text-secondary">
-                <p>No announcements available</p>
+              <div className="text-center py-12">
+                <p className="text-text-secondary mb-2">
+                  {searchQuery ? `No announcements found for "${searchQuery}"` : 'No announcements available'}
+                </p>
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearSearch}
+                    className="mt-2"
+                  >
+                    Clear search
+                  </Button>
+                )}
               </div>
             ) : (
               <>
@@ -415,9 +613,10 @@ export default function DashboardPage() {
                       <TableHeaderCell className="w-36">Date & Time</TableHeaderCell>
                       <TableHeaderCell className="w-40">Company</TableHeaderCell>
                       <TableHeaderCell className="w-32">Symbol</TableHeaderCell>
-                      <TableHeaderCell className="min-w-[400px]">Headline</TableHeaderCell>
+                      <TableHeaderCell className="min-w-[400px] max-w-none">Headline</TableHeaderCell>
                       <TableHeaderCell className="w-32">Category</TableHeaderCell>
-                      <TableHeaderCell className="w-24">Actions</TableHeaderCell>
+                      <TableHeaderCell className="w-32">Attachment</TableHeaderCell>
+                      <TableHeaderCell className="w-16">Actions</TableHeaderCell>
                     </TableHeader>
                     <TableBody>
                       {announcements.map((announcement, index) => {
@@ -451,7 +650,9 @@ export default function DashboardPage() {
                             </TableCell>
                             <TableCell className="text-sm text-text-primary">
                               <div>
-                                <div className="font-medium">{announcement.company_name || '-'}</div>
+                                <div className="font-medium">
+                                  {announcement.company_name && announcement.company_name.trim() ? announcement.company_name : '-'}
+                                </div>
                                 {isFirstRow && (announcement.price !== undefined || announcement.price_change !== undefined) && (
                                   <div className="text-xs mt-1">
                                     {announcement.price !== undefined && (
@@ -468,51 +669,83 @@ export default function DashboardPage() {
                             </TableCell>
                             <TableCell className="text-sm">
                               <div className="flex flex-col gap-1">
-                                {announcement.symbol_nse && (
+                                {announcement.symbol_nse && announcement.symbol_nse.trim() && (
                                   <span className="font-mono text-xs text-primary">NSE: {announcement.symbol_nse}</span>
                                 )}
-                                {announcement.symbol_bse && (
+                                {announcement.symbol_bse && announcement.symbol_bse.trim() && (
                                   <span className="font-mono text-xs text-primary">BSE: {announcement.symbol_bse}</span>
                                 )}
-                                {!announcement.symbol_nse && !announcement.symbol_bse && (
+                                {announcement.symbol && announcement.symbol.trim() && 
+                                 (!announcement.symbol_nse || !announcement.symbol_nse.trim()) && 
+                                 (!announcement.symbol_bse || !announcement.symbol_bse.trim()) && (
+                                  <span className="font-mono text-xs text-primary">{announcement.symbol}</span>
+                                )}
+                                {(!announcement.symbol_nse || !announcement.symbol_nse.trim()) && 
+                                 (!announcement.symbol_bse || !announcement.symbol_bse.trim()) && 
+                                 (!announcement.symbol || !announcement.symbol.trim()) && (
                                   <span className="text-xs text-text-secondary">-</span>
                                 )}
                               </div>
                             </TableCell>
                             <TableCell className="text-sm text-text-primary">
-                              <div className="font-medium">{announcement.headline || '-'}</div>
-                              {announcement.description && (
-                                <div className="text-xs text-text-secondary mt-1 line-clamp-2">{announcement.description}</div>
-                              )}
+                              <div>
+                                <div className="font-medium break-words whitespace-normal overflow-wrap-anywhere">
+                                  {announcement.headline && announcement.headline.trim() ? announcement.headline : '-'}
+                                </div>
+                                {announcement.description && (
+                                  <div className="mt-1">
+                                    <div className={`text-xs text-text-secondary transition-all duration-200 ${
+                                      isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'
+                                    }`}>
+                                      {announcement.description}
+                                    </div>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        toggleRowExpansion(announcement.announcement_id)
+                                      }}
+                                      className="mt-1 text-xs text-primary hover:text-primary/80 hover:underline flex items-center gap-1 transition-colors"
+                                      title={isExpanded ? 'Collapse description' : 'Expand description'}
+                                    >
+                                      {isExpanded ? (
+                                        <>
+                                          <ChevronUp className="w-3 h-3" />
+                                          <span>Show less</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ChevronDown className="w-3 h-3" />
+                                          <span>Show more</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="text-sm text-text-secondary">
                               {announcement.category || '-'}
                             </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                {announcement.description && (
-                                  <button
-                                    onClick={() => toggleRowExpansion(announcement.announcement_id)}
-                                    className="p-1 hover:bg-background/50 rounded transition-colors"
-                                    title={isExpanded ? 'Collapse' : 'Expand'}
-                                  >
-                                    {isExpanded ? (
-                                      <ChevronUp className="w-4 h-4 text-text-secondary" />
-                                    ) : (
-                                      <ChevronDown className="w-4 h-4 text-text-secondary" />
-                                    )}
-                                  </button>
-                                )}
-                                {announcement.attachment_id && (
-                                  <button
-                                    onClick={() => handleDownloadAttachment(announcement.announcement_id)}
-                                    className="p-1 hover:bg-background/50 rounded transition-colors"
-                                    title="Download attachment"
-                                  >
-                                    <Download className="w-4 h-4 text-text-secondary" />
-                                  </button>
-                                )}
-                              </div>
+                            <TableCell className="text-sm">
+                              {announcement.attachment_id && 
+                               announcement.attachment_id.trim() && 
+                               announcement.attachment_id.trim() !== '' &&
+                               announcement.attachment_id.trim().toLowerCase() !== 'null' &&
+                               announcement.attachment_id.trim().toLowerCase() !== 'none' ? (
+                                <button
+                                  onClick={() => handleDownloadAttachment(announcement.announcement_id)}
+                                  className="text-primary hover:text-primary/80 hover:underline flex items-center gap-1.5 transition-colors"
+                                  title="Download attachment"
+                                >
+                                  <Download className="w-4 h-4" />
+                                  <span className="text-xs">Download</span>
+                                </button>
+                              ) : (
+                                <span className="text-xs text-text-secondary">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="w-16">
+                              {/* Actions column - expand button moved to headline column */}
                             </TableCell>
                           </TableRow>
                         )
@@ -521,20 +754,6 @@ export default function DashboardPage() {
                   </Table>
                 </div>
 
-                {/* Expanded content */}
-                {announcements.map((announcement) => {
-                  if (!expandedRows.has(announcement.announcement_id) || !announcement.description) return null
-                  return (
-                    <div
-                      key={`expanded-${announcement.announcement_id}`}
-                      className="border-t border-border bg-background/30 p-4"
-                    >
-                      <div className="text-sm text-text-secondary whitespace-pre-wrap">
-                        {announcement.description}
-                      </div>
-                    </div>
-                  )
-                })}
 
                 {/* Pagination Controls */}
                 {totalPages > 0 && (

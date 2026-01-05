@@ -778,6 +778,6 @@ export const announcementsAPI = {
     const response = await api.get(`/announcements/${announcementId}/attachment`, {
       responseType: 'blob'
     })
-    return new Blob([response.data])
+    return response // Return full response to access headers
   },
 }
