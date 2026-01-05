@@ -1,35 +1,38 @@
-name: Deploy the server via cloudflare tunnel
+name: Build & Push Images to GHCR
 
 on:
   push:
-    branches : [ main ]
-
+    branches: [ main ]
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      packages: write
+
     steps:
-      - name : Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: install cloudflare
+      - name: Login to GHCR
         run: |
-          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
-            -o cloudflared
-          chmod +x cloudflared
-          sudo mv cloudflared /usr/local/bin/cloudflared
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
+            -u ${{ github.actor }} --password-stdin
 
-      - name: Authenticate Cloudflare Tunnel
+      - name: Build & push backend image
         run: |
-          cloudflared tunnel login --token "${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}"
+          docker build \
+            -f server/docker/backend.Dockerfile \
+            -t ghcr.io/${{ github.actor }}/rubik-backend:latest \
+            .
+          docker push ghcr.io/${{ github.actor }}/rubik-backend:latest
 
-      - name: Deploy to home server
+      - name: Build & push frontend image
         run: |
-          cloudflared access ssh \
-            --hostname ${{ secrets.SERVER_HOST }} \
-            --user ${{ secrets.SERVER_USER }} << 'EOF'
-              cd ~/YOUR_PROJECT_FOLDER
-              docker compose pull
-              docker compose up -d
-          EOF
+          docker build \
+            -f server/docker/frontend.Dockerfile \
+            -t ghcr.io/${{ github.actor }}/rubik-frontend:latest \
+            .
+          docker push ghcr.io/${{ github.actor }}/rubik-frontend:latest
