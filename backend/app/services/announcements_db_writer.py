@@ -353,9 +353,34 @@ class AnnouncementsDBWriter:
                         logger.debug(f"Skipping duplicate announcement: {announcement_id}")
                         continue  # Skip duplicate
                     
+                    # Parse announcement_datetime FIRST (needed for duplicate checking below)
+                    announcement_datetime = None
+                    if message.get("announcement_datetime"):
+                        try:
+                            # Try to parse various datetime formats
+                            dt_str = message["announcement_datetime"]
+                            if isinstance(dt_str, str):
+                                # Try ISO format first
+                                try:
+                                    announcement_datetime = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+                                except:
+                                    # Try other formats
+                                    for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d', '%d-%m-%Y %H:%M:%S']:
+                                        try:
+                                            announcement_datetime = datetime.strptime(dt_str, fmt)
+                                            break
+                                        except:
+                                            continue
+                            
+                            if announcement_datetime and announcement_datetime.tzinfo is None:
+                                announcement_datetime = announcement_datetime.replace(tzinfo=timezone.utc)
+                        except Exception as e:
+                            logger.debug(f"Could not parse announcement_datetime: {e}")
+                            announcement_datetime = None
+                    
                     # Additional check: If headline and datetime match, consider it a duplicate
                     # This catches cases where announcement_id might be generated differently
-                    if headline:
+                    if headline and announcement_datetime:
                         similar = conn.execute("""
                             SELECT announcement_id FROM corporate_announcements 
                             WHERE headline = ? 
@@ -407,31 +432,6 @@ class AnnouncementsDBWriter:
                                 if not message.get("symbol"):
                                     message["symbol"] = matched_bse
                             logger.info(f"Matched symbols for {announcement_id}: NSE={matched_nse}, BSE={matched_bse}, Company={matched_company}")
-                    
-                    # Parse announcement_datetime
-                    announcement_datetime = None
-                    if message.get("announcement_datetime"):
-                        try:
-                            # Try to parse various datetime formats
-                            dt_str = message["announcement_datetime"]
-                            if isinstance(dt_str, str):
-                                # Try ISO format first
-                                try:
-                                    announcement_datetime = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-                                except:
-                                    # Try other formats
-                                    for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d']:
-                                        try:
-                                            announcement_datetime = datetime.strptime(dt_str, fmt)
-                                            break
-                                        except:
-                                            continue
-                            
-                            if announcement_datetime and announcement_datetime.tzinfo is None:
-                                announcement_datetime = announcement_datetime.replace(tzinfo=timezone.utc)
-                        except Exception as e:
-                            logger.debug(f"Could not parse announcement_datetime: {e}")
-                            announcement_datetime = None
                     
                     # Parse received_at
                     received_at = datetime.now(timezone.utc)

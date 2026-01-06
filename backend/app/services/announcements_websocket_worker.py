@@ -190,8 +190,9 @@ class AnnouncementsWebSocketWorker:
                                 logger.info(f"Received announcement: {announcement_id} - {headline}")
                                 logger.debug(f"Queued announcement: {announcement_id}")
                             else:
-                                logger.warning(f"Failed to parse announcement message (returned None)")
-                                logger.debug(f"Message preview: {str(message)[:200] if isinstance(message, str) else str(message)[:200]}")
+                                # This is expected - messages without headline/description are skipped
+                                # Only log at debug level to reduce noise
+                                logger.debug(f"Skipped invalid announcement message (no headline/description or invalid data)")
                         except Exception as e:
                             logger.error(f"Error parsing announcement message: {e}")
                             logger.debug(f"Raw message: {message[:500] if isinstance(message, str) else str(message)[:500]}")
@@ -240,8 +241,11 @@ class AnnouncementsWebSocketWorker:
         """
         Parse WebSocket message into structured announcement data
         
-        TrueData WebSocket messages can have various formats.
-        This parser handles multiple possible formats.
+        TrueData WebSocket messages can have various formats:
+        1. Array format: ["id", "datetime", num, "", "SYMBOL_BSE", "Company Name", "N", "category", "category", "headline", ...]
+        2. Dictionary format: {"announcement_id": "...", "headline": "...", ...}
+        
+        This parser handles both formats.
         """
         try:
             data = json.loads(message)
@@ -251,201 +255,271 @@ class AnnouncementsWebSocketWorker:
                 self._logged_message_count = 0
             if self._logged_message_count < 5:
                 logger.info(f"Sample WebSocket message structure (full): {json.dumps(data, indent=2)}")
-                logger.info(f"Message keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}")
+                logger.info(f"Message type: {type(data).__name__}, Length: {len(data) if isinstance(data, (list, dict)) else 'N/A'}")
                 # Also print to console for visibility
                 print(f"\n[WEBSOCKET MESSAGE] Sample message structure:")
-                print(json.dumps(data, indent=2)[:1000])  # First 1000 chars
-                print(f"Message keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}\n")
+                print(f"Type: {type(data).__name__}")
+                if isinstance(data, list):
+                    print(f"Array length: {len(data)}")
+                    print("Array content (first 10 items):")
+                    for i, item in enumerate(data[:10]):
+                        print(f"  [{i}]: {item} ({type(item).__name__})")
+                elif isinstance(data, dict):
+                    print(f"Dict keys: {list(data.keys())}")
+                    print(json.dumps(data, indent=2)[:1000])  # First 1000 chars
+                print()
                 self._logged_message_count += 1
             
-            # Try multiple possible ID fields
-            announcement_id = (
-                data.get("announcement_id") or 
-                data.get("id") or 
-                data.get("announcementId") or
-                data.get("AnnouncementID") or
-                data.get("announcementID") or
-                data.get("_id") or
-                str(data.get("timestamp", "")) + "_" + str(data.get("symbol", "")) if data.get("timestamp") or data.get("symbol") else None
-            )
+            # HANDLE ARRAY FORMAT (TrueData sends announcements as arrays)
+            # Format: [announcement_id, datetime, num, "", "SYMBOL_BSE", "Company Name", "N", category, category, headline, ...]
+            if isinstance(data, list) and len(data) >= 10:
+                try:
+                    # Extract fields from array (based on observed TrueData format)
+                    # [0] = announcement_id
+                    # [1] = datetime
+                    # [4] = symbol (e.g., "SSLEL_BSE", "RELIANCE_NSE")
+                    # [5] = company name
+                    # [7] = category
+                    # [9] = headline/description
+                    
+                    announcement_id = str(data[0]) if data[0] else None
+                    announcement_datetime = data[1] if len(data) > 1 else None
+                    symbol_raw = data[4] if len(data) > 4 else None
+                    company_name = data[5] if len(data) > 5 else None
+                    category = data[7] if len(data) > 7 else None
+                    headline = data[9] if len(data) > 9 else None
+                    
+                    # Parse symbol to determine exchange
+                    symbol_nse = None
+                    symbol_bse = None
+                    exchange = None
+                    
+                    if symbol_raw and isinstance(symbol_raw, str):
+                        symbol_upper = symbol_raw.upper()
+                        if "_BSE" in symbol_upper or symbol_upper.endswith("_B"):
+                            # BSE symbol
+                            symbol_bse = symbol_upper.replace("_BSE", "").replace("_B", "").strip()
+                            exchange = "BSE"
+                        elif "_NSE" in symbol_upper or symbol_upper.endswith("_N"):
+                            # NSE symbol
+                            symbol_nse = symbol_upper.replace("_NSE", "").replace("_N", "").strip()
+                            exchange = "NSE"
+                        else:
+                            # Default to NSE if no suffix
+                            symbol_nse = symbol_upper.strip()
+                            exchange = "NSE"
+                    
+                    # Validate we have minimum required data
+                    if not announcement_id:
+                        logger.warning("Array format message missing announcement_id")
+                        return None
+                    
+                    if not headline or (isinstance(headline, str) and headline.strip() in ["-", "", "null", "None"]):
+                        logger.warning(f"Array format announcement {announcement_id}: no valid headline")
+                        return None
+                    
+                    parsed = {
+                        "announcement_id": str(announcement_id),
+                        "symbol": symbol_nse or symbol_bse or symbol_raw,  # Best available symbol
+                        "symbol_nse": symbol_nse,
+                        "symbol_bse": symbol_bse,
+                        "exchange": exchange,
+                        "headline": headline if isinstance(headline, str) else str(headline) if headline else None,
+                        "description": None,  # Array format doesn't have separate description
+                        "category": category if isinstance(category, str) else str(category) if category else None,
+                        "announcement_datetime": announcement_datetime,
+                        "attachment_id": None,  # Not available in array format
+                        "received_at": datetime.now(timezone.utc).isoformat(),
+                        "raw_payload": message,  # Store raw for debugging
+                        "_company_name_hint": company_name  # Store for potential matching
+                    }
+                    
+                    logger.info(f"Parsed array format announcement: {announcement_id}, Symbol: {symbol_nse or symbol_bse}, Company: {company_name}")
+                    return parsed
+                    
+                except Exception as e:
+                    logger.error(f"Error parsing array format message: {e}")
+                    logger.debug(f"Array data: {data[:10] if len(data) > 10 else data}")
+                    # Fall through to dictionary parsing
             
-            # If still no ID, try to generate one from available fields
-            if not announcement_id:
-                # Try to create a unique ID from timestamp + symbol
-                timestamp = data.get("timestamp") or data.get("date") or data.get("announcement_datetime") or data.get("tradedate")
-                symbol = data.get("symbol") or data.get("symbol_nse") or data.get("symbol_bse")
-                if timestamp and symbol:
-                    announcement_id = f"{symbol}_{timestamp}"
-                elif timestamp:
-                    announcement_id = f"ann_{timestamp}"
-                elif symbol:
-                    announcement_id = f"{symbol}_{datetime.now(timezone.utc).timestamp()}"
-                else:
-                    # Last resort: use hash of message
-                    import hashlib
-                    announcement_id = hashlib.md5(message.encode()).hexdigest()[:16]
-            
-            if not announcement_id:
-                logger.warning("Message missing announcement_id and cannot generate one, skipping")
-                logger.debug(f"Message keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}")
-                return None
-            
-            # Extract symbol(s) - try multiple possible field names and variations
-            symbol = (
-                data.get("symbol") or 
-                data.get("Symbol") or
-                data.get("SYMBOL") or
-                data.get("company_symbol") or
-                data.get("trading_symbol") or
-                data.get("TradingSymbol") or
-                data.get("companySymbol") or
-                data.get("CompanySymbol") or
-                data.get("scrip") or
-                data.get("Scrip") or
-                data.get("scripcode") or
-                data.get("ScripCode")
-            )
-            symbol_nse = (
-                data.get("symbol_nse") or 
-                data.get("SymbolNSE") or 
-                data.get("symbolNSE") or
-                data.get("NSE") or
-                data.get("nse_symbol") or
-                data.get("NSE_SYMBOL")
-            )
-            symbol_bse = (
-                data.get("symbol_bse") or 
-                data.get("SymbolBSE") or 
-                data.get("symbolBSE") or
-                data.get("BSE") or
-                data.get("bse_symbol") or
-                data.get("BSE_SYMBOL")
-            )
-            
-            # Try to extract from exchange-specific fields
-            if not symbol_nse and not symbol_bse:
-                # Check if there's a nested structure
-                if isinstance(data.get("nse"), dict):
-                    symbol_nse = data["nse"].get("symbol") or data["nse"].get("trading_symbol")
-                if isinstance(data.get("bse"), dict):
-                    symbol_bse = data["bse"].get("symbol") or data["bse"].get("trading_symbol")
-            
-            # If single symbol provided, try to determine exchange
-            if symbol and not symbol_nse and not symbol_bse:
-                # Try to infer exchange from symbol format or use data.get("exchange")
-                exchange = (
-                    data.get("exchange") or 
-                    data.get("Exchange") or 
-                    data.get("EXCHANGE") or
-                    data.get("exch") or
-                    data.get("Exch") or
-                    "NSE"  # Default to NSE
+            # HANDLE DICTIONARY FORMAT (fallback for other message formats)
+            if isinstance(data, dict):
+                # Try multiple possible ID fields
+                announcement_id = (
+                    data.get("announcement_id") or 
+                    data.get("id") or 
+                    data.get("announcementId") or
+                    data.get("AnnouncementID") or
+                    data.get("announcementID") or
+                    data.get("_id") or
+                    str(data.get("timestamp", "")) + "_" + str(data.get("symbol", "")) if data.get("timestamp") or data.get("symbol") else None
                 )
-                if exchange.upper() in ["NSE", "N", "NSECM", "NSE_EQ"]:
-                    symbol_nse = symbol
-                elif exchange.upper() in ["BSE", "B", "BSEEQ", "BSE_EQ"]:
-                    symbol_bse = symbol
-                else:
-                    # Default to NSE if unknown
-                    symbol_nse = symbol
+                
+                # If still no ID, try to generate one from available fields
+                if not announcement_id:
+                    # Try to create a unique ID from timestamp + symbol
+                    timestamp = data.get("timestamp") or data.get("date") or data.get("announcement_datetime") or data.get("tradedate")
+                    symbol = data.get("symbol") or data.get("symbol_nse") or data.get("symbol_bse")
+                    if timestamp and symbol:
+                        announcement_id = f"{symbol}_{timestamp}"
+                    elif timestamp:
+                        announcement_id = f"ann_{timestamp}"
+                    elif symbol:
+                        announcement_id = f"{symbol}_{datetime.now(timezone.utc).timestamp()}"
+                    else:
+                        # Last resort: use hash of message
+                        import hashlib
+                        announcement_id = hashlib.md5(message.encode()).hexdigest()[:16]
+                
+                if not announcement_id:
+                    logger.warning("Dictionary message missing announcement_id and cannot generate one, skipping")
+                    logger.debug(f"Message keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}")
+                    return None
+                
+                # Extract symbol(s) - try multiple possible field names and variations
+                symbol = (
+                    data.get("symbol") or 
+                    data.get("Symbol") or
+                    data.get("SYMBOL") or
+                    data.get("company_symbol") or
+                    data.get("trading_symbol") or
+                    data.get("TradingSymbol") or
+                    data.get("companySymbol") or
+                    data.get("CompanySymbol") or
+                    data.get("scrip") or
+                    data.get("Scrip") or
+                    data.get("scripcode") or
+                    data.get("ScripCode")
+                )
+                symbol_nse = (
+                    data.get("symbol_nse") or 
+                    data.get("SymbolNSE") or 
+                    data.get("symbolNSE") or
+                    data.get("NSE") or
+                    data.get("nse_symbol") or
+                    data.get("NSE_SYMBOL")
+                )
+                symbol_bse = (
+                    data.get("symbol_bse") or 
+                    data.get("SymbolBSE") or 
+                    data.get("symbolBSE") or
+                    data.get("BSE") or
+                    data.get("bse_symbol") or
+                    data.get("BSE_SYMBOL")
+                )
+                
+                # Try to extract from exchange-specific fields
+                if not symbol_nse and not symbol_bse:
+                    # Check if there's a nested structure
+                    if isinstance(data.get("nse"), dict):
+                        symbol_nse = data["nse"].get("symbol") or data["nse"].get("trading_symbol")
+                    if isinstance(data.get("bse"), dict):
+                        symbol_bse = data["bse"].get("symbol") or data["bse"].get("trading_symbol")
+                
+                # If single symbol provided, try to determine exchange
+                if symbol and not symbol_nse and not symbol_bse:
+                    # Try to infer exchange from symbol format or use data.get("exchange")
+                    exchange = (
+                        data.get("exchange") or 
+                        data.get("Exchange") or 
+                        data.get("EXCHANGE") or
+                        data.get("exch") or
+                        data.get("Exch") or
+                        "NSE"  # Default to NSE
+                    )
+                    if exchange.upper() in ["NSE", "N", "NSECM", "NSE_EQ"]:
+                        symbol_nse = symbol
+                    elif exchange.upper() in ["BSE", "B", "BSEEQ", "BSE_EQ"]:
+                        symbol_bse = symbol
+                    else:
+                        # Default to NSE if unknown
+                        symbol_nse = symbol
+                
+                # Build parsed announcement - try multiple field name variations
+                headline = (
+                    data.get("headline") or 
+                    data.get("Headline") or
+                    data.get("HEADLINE") or
+                    data.get("subject") or 
+                    data.get("Subject") or
+                    data.get("title") or
+                    data.get("Title") or
+                    data.get("news_sub") or
+                    data.get("NewsSub")
+                )
+                
+                description = (
+                    data.get("description") or 
+                    data.get("Description") or
+                    data.get("DESCRIPTION") or
+                    data.get("news_body") or 
+                    data.get("NewsBody") or
+                    data.get("body") or
+                    data.get("Body") or
+                    data.get("content") or
+                    data.get("Content")
+                )
+                
+                # VALIDATION: Skip blank/invalid announcements
+                # Must have at least headline OR description to be valid
+                if not headline and not description:
+                    # This is expected - some WebSocket messages may not have headline/description
+                    # Only log at debug level to reduce noise in production
+                    logger.debug(f"Skipping announcement {announcement_id}: no headline or description")
+                    return None
+                
+                # Skip if headline is just "-" or empty string
+                if headline and headline.strip() in ["-", "", "null", "None"]:
+                    # This is expected - invalid headlines are filtered out
+                    logger.debug(f"Skipping announcement {announcement_id}: invalid headline '{headline}'")
+                    return None
+                
+                parsed = {
+                    "announcement_id": str(announcement_id),
+                    "symbol": symbol,  # Keep for reference
+                    "symbol_nse": symbol_nse,
+                    "symbol_bse": symbol_bse,
+                    "exchange": data.get("exchange") or data.get("Exchange") or data.get("EXCHANGE"),
+                    "headline": headline,
+                    "description": description,
+                    "category": (
+                        data.get("category") or 
+                        data.get("Category") or
+                        data.get("CATEGORY") or
+                        data.get("descriptor") or 
+                        data.get("Descriptor") or
+                        data.get("type") or
+                        data.get("Type") or
+                        data.get("TYPE")
+                    ),
+                    "announcement_datetime": (
+                        data.get("announcement_datetime") or 
+                        data.get("AnnouncementDateTime") or
+                        data.get("tradedate") or 
+                        data.get("TradeDate") or
+                        data.get("date") or
+                        data.get("Date") or
+                        data.get("DATE") or
+                        data.get("timestamp") or
+                        data.get("Timestamp")
+                    ),
+                    "attachment_id": (
+                        data.get("attachment_id") or 
+                        data.get("AttachmentID") or
+                        data.get("attachment") or
+                        data.get("Attachment") or
+                        data.get("file_id") or
+                        data.get("FileID")
+                    ),
+                    "received_at": datetime.now(timezone.utc).isoformat(),
+                    "raw_payload": message  # Store raw for debugging
+                }
+                
+                return parsed
             
-            # Last resort: Try to extract symbol from headline or description
-            # Look for common patterns like "RELIANCE", "TCS", etc. in headline
-            if not symbol and not symbol_nse and not symbol_bse:
-                headline = data.get("headline") or data.get("Headline") or data.get("subject") or data.get("title")
-                if headline:
-                    # Try to find a symbol pattern (3-20 uppercase letters/numbers, possibly with -EQ suffix)
-                    import re
-                    # Pattern: Uppercase letters/numbers, possibly followed by -EQ or similar
-                    symbol_pattern = r'\b([A-Z0-9]{3,20}(?:-EQ|-BE|-FUT|-OPT)?)\b'
-                    matches = re.findall(symbol_pattern, str(headline).upper())
-                    if matches:
-                        # Use first match as symbol
-                        potential_symbol = matches[0]
-                        # Remove common suffixes to get base symbol
-                        base_symbol = potential_symbol.replace("-EQ", "").replace("-BE", "").replace("-FUT", "").replace("-OPT", "")
-                        symbol_nse = base_symbol  # Default to NSE
-                        logger.debug(f"Extracted symbol '{base_symbol}' from headline: {headline[:50]}")
-            
-            # Build parsed announcement - try multiple field name variations
-            headline = (
-                data.get("headline") or 
-                data.get("Headline") or
-                data.get("HEADLINE") or
-                data.get("subject") or 
-                data.get("Subject") or
-                data.get("title") or
-                data.get("Title") or
-                data.get("news_sub") or
-                data.get("NewsSub")
-            )
-            
-            description = (
-                data.get("description") or 
-                data.get("Description") or
-                data.get("DESCRIPTION") or
-                data.get("news_body") or 
-                data.get("NewsBody") or
-                data.get("body") or
-                data.get("Body") or
-                data.get("content") or
-                data.get("Content")
-            )
-            
-            # VALIDATION: Skip blank/invalid announcements
-            # Must have at least headline OR description to be valid
-            if not headline and not description:
-                logger.warning(f"Skipping announcement {announcement_id}: no headline or description")
-                logger.debug(f"Message data keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}")
-                return None
-            
-            # Skip if headline is just "-" or empty string
-            if headline and headline.strip() in ["-", "", "null", "None"]:
-                logger.warning(f"Skipping announcement {announcement_id}: invalid headline '{headline}'")
-                return None
-            
-            parsed = {
-                "announcement_id": str(announcement_id),
-                "symbol": symbol,  # Keep for reference
-                "symbol_nse": symbol_nse,
-                "symbol_bse": symbol_bse,
-                "exchange": data.get("exchange") or data.get("Exchange") or data.get("EXCHANGE"),
-                "headline": headline,
-                "description": description,
-                "category": (
-                    data.get("category") or 
-                    data.get("Category") or
-                    data.get("CATEGORY") or
-                    data.get("descriptor") or 
-                    data.get("Descriptor") or
-                    data.get("type") or
-                    data.get("Type") or
-                    data.get("TYPE")
-                ),
-                "announcement_datetime": (
-                    data.get("announcement_datetime") or 
-                    data.get("AnnouncementDateTime") or
-                    data.get("tradedate") or 
-                    data.get("TradeDate") or
-                    data.get("date") or
-                    data.get("Date") or
-                    data.get("DATE") or
-                    data.get("timestamp") or
-                    data.get("Timestamp")
-                ),
-                "attachment_id": (
-                    data.get("attachment_id") or 
-                    data.get("AttachmentID") or
-                    data.get("attachment") or
-                    data.get("Attachment") or
-                    data.get("file_id") or
-                    data.get("FileID")
-                ),
-                "received_at": datetime.now(timezone.utc).isoformat(),
-                "raw_payload": message  # Store raw for debugging
-            }
-            
-            return parsed
+            # If neither array nor dict format matches
+            logger.warning(f"Unknown message format: {type(data).__name__}")
+            return None
             
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON message: {e}")
