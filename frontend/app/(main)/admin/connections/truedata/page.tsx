@@ -83,6 +83,20 @@ export default function TrueDataPage() {
   useEffect(() => {
     loadConnection()
   }, [])
+  
+  // Auto-refresh WebSocket status every 10 seconds when connection exists
+  useEffect(() => {
+    if (!connection) return
+    
+    loadWebSocketStatus() // Load immediately
+    const wsStatusInterval = setInterval(() => {
+      loadWebSocketStatus()
+    }, 10000)
+    
+    return () => {
+      clearInterval(wsStatusInterval)
+    }
+  }, [connection])
 
   // Auto-refresh WebSocket status every 10 seconds when connection exists
   useEffect(() => {
@@ -350,7 +364,6 @@ export default function TrueDataPage() {
       await loadConnection() // Reload connection to get updated status
       await loadTokenStatus(connection.id)
       await loadWebSocketStatus() // Refresh WebSocket status
-
       // Show success message in modal (refresh always generates a new token)
       setSuccessMessage(response.message || 'Token refreshed successfully!')
       setIsSuccessOpen(true)
