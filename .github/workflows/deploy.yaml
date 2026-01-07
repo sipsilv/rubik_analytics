@@ -18,10 +18,6 @@ jobs:
       contents: read
       packages: write
 
-    permissions:
-      contents: read
-      packages: write
-
     steps:
       # 🚀 BUILD STARTED NOTIFICATION
       - name: Slack Notify Build Started
@@ -36,7 +32,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-
+        
       - name: Login to GHCR
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
