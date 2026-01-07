@@ -2,6 +2,7 @@ FROM node:18-bookworm-slim AS base
 
 # ---------------- deps ----------------
 FROM base AS deps
+RUN apk add --no-cache libc6-compat wget
 WORKDIR /app
 
 ARG NEXT_PUBLIC_API_URL
@@ -36,8 +37,11 @@ ENV TZ=Asia/Kolkata
 # Install wget and tzdata for healthcheck and timezone support
 RUN apk add --no-cache wget tzdata
 
-RUN addgroup --system --gid 1001 nodejs \
- && adduser  --system --uid 1001 nextjs
+# Install wget for healthcheck
+RUN apk add --no-cache wget
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
 
 # Standalone output (NOW THESE PATHS EXIST)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

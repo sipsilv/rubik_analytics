@@ -67,7 +67,6 @@ async def get_announcements(
     from_date: Optional[str] = Query(None, description="From date (YYYY-MM-DD)"),
     to_date: Optional[str] = Query(None, description="To date (YYYY-MM-DD)"),
     symbol: Optional[str] = Query(None, description="Filter by symbol (NSE or BSE)"),
-    search: Optional[str] = Query(None, description="Search by headline or symbol (flexible match)"),
     limit: Optional[int] = Query(None, description="Maximum number of records (legacy)"),
     offset: int = Query(0, description="Offset for pagination (legacy)"),
     page: Optional[int] = Query(None, description="Page number (1-indexed)"),
@@ -84,7 +83,6 @@ async def get_announcements(
             from_date=from_date,
             to_date=to_date,
             symbol=symbol,
-            search=search,
             limit=limit,
             offset=offset,
             page=page,
@@ -106,7 +104,7 @@ async def get_announcements(
             try:
                 enriched_ann = ann.copy()
                 if ann.get("descriptor_id"):
-                    desc_meta = descriptor_metadata.get(ann["descriptor_id"])
+                    desc_meta = service.get_descriptor_metadata(ann["descriptor_id"])
                     if desc_meta:
                         enriched_ann["descriptor_name"] = desc_meta.get("descriptor_name")
                         enriched_ann["descriptor_category"] = desc_meta.get("descriptor_category")
