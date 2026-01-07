@@ -185,8 +185,12 @@ class AnnouncementsService:
     
     def insert_announcement(self, announcement: Dict[str, Any]) -> bool:
         """
-        Insert or update an announcement (duplicate detection based on company_name and news_headline)
-        For announcements without company_name, deduplicate based on news_headline and trade_date
+        Insert or update an announcement with duplicate detection.
+        
+        Duplicate detection strategy:
+        - With company_name: same company_name + same headline = duplicate
+        - Without company_name: same headline + same date + same symbol = duplicate
+          (This allows different funds/companies with same headline to be stored separately)
         
         Args:
             announcement: Dictionary with announcement fields
@@ -227,11 +231,17 @@ class AnnouncementsService:
                     return False
             
             # Special case: If no company_name but headline is present, check for duplicates
-            # based on headline + trade_date (to avoid removing legitimate duplicates on different dates)
+            # based on headline + trade_date + symbol (to distinguish different funds/companies)
+            # This prevents removing legitimate announcements from different sources with same headline
             if (not company_name or str(company_name).strip() == '') and news_headline:
                 news_headline_normalized = str(news_headline).strip().lower()
+                symbol_nse = announcement.get("symbol_nse")
+                symbol_bse = announcement.get("symbol_bse")
+                script_code = announcement.get("script_code")
                 
-                # Check if duplicate exists based on headline and trade_date
+                # Use symbol (NSE, BSE, or script_code) to differentiate announcements
+                # Same headline + same date + same symbol = duplicate
+                # Same headline + same date + different symbol = different announcement (e.g., different mutual funds)
                 if trade_date:
                     # Normalize trade_date for comparison (extract date part only, ignore time)
                     try:
@@ -242,38 +252,83 @@ class AnnouncementsService:
                         else:
                             date_str = str(trade_date).split(' ')[0].split('T')[0]
                         
-                        existing = conn.execute("""
+                        # Build query with symbol matching
+                        query = """
                             SELECT id FROM corporate_announcements 
                             WHERE (company_name IS NULL OR TRIM(company_name) = '')
                             AND LOWER(TRIM(news_headline)) = ?
                             AND DATE(trade_date) = DATE(?)
-                        """, [news_headline_normalized, date_str]).fetchone()
+                        """
+                        params = [news_headline_normalized, date_str]
+                        
+                        # Add symbol conditions if available
+                        if symbol_nse:
+                            query += " AND symbol_nse = ?"
+                            params.append(symbol_nse)
+                        elif symbol_bse:
+                            query += " AND symbol_bse = ?"
+                            params.append(symbol_bse)
+                        elif script_code:
+                            query += " AND script_code = ?"
+                            params.append(script_code)
+                        else:
+                            # No symbol available, fall back to headline + date only
+                            # This is less ideal but needed for announcements without symbol
+                            pass
+                        
+                        existing = conn.execute(query, params).fetchone()
                         
                         if existing:
-                            logger.debug(f"Skipping duplicate announcement (no company): headline='{news_headline[:50]}...', date='{date_str}'")
+                            logger.debug(f"Skipping duplicate announcement (no company, same symbol): headline='{news_headline[:50]}...', date='{date_str}', symbol='{symbol_nse or symbol_bse or script_code}'")
                             return False
                     except Exception as date_error:
                         logger.warning(f"Error parsing trade_date for duplicate check: {date_error}")
-                        # Fall back to headline-only check if date parsing fails
-                        existing = conn.execute("""
+                        # Fall back to headline + symbol check if date parsing fails
+                        query = """
                             SELECT id FROM corporate_announcements 
                             WHERE (company_name IS NULL OR TRIM(company_name) = '')
                             AND LOWER(TRIM(news_headline)) = ?
-                        """, [news_headline_normalized]).fetchone()
+                        """
+                        params = [news_headline_normalized]
+                        
+                        if symbol_nse:
+                            query += " AND symbol_nse = ?"
+                            params.append(symbol_nse)
+                        elif symbol_bse:
+                            query += " AND symbol_bse = ?"
+                            params.append(symbol_bse)
+                        elif script_code:
+                            query += " AND script_code = ?"
+                            params.append(script_code)
+                        
+                        existing = conn.execute(query, params).fetchone()
                         
                         if existing:
-                            logger.debug(f"Skipping duplicate announcement (no company, headline only): headline='{news_headline[:50]}...'")
+                            logger.debug(f"Skipping duplicate announcement (no company, headline+symbol only): headline='{news_headline[:50]}...'")
                             return False
                 else:
-                    # No trade_date, check headline only
-                    existing = conn.execute("""
+                    # No trade_date, check headline + symbol only
+                    query = """
                         SELECT id FROM corporate_announcements 
                         WHERE (company_name IS NULL OR TRIM(company_name) = '')
                         AND LOWER(TRIM(news_headline)) = ?
-                    """, [news_headline_normalized]).fetchone()
+                    """
+                    params = [news_headline_normalized]
+                    
+                    if symbol_nse:
+                        query += " AND symbol_nse = ?"
+                        params.append(symbol_nse)
+                    elif symbol_bse:
+                        query += " AND symbol_bse = ?"
+                        params.append(symbol_bse)
+                    elif script_code:
+                        query += " AND script_code = ?"
+                        params.append(script_code)
+                    
+                    existing = conn.execute(query, params).fetchone()
                     
                     if existing:
-                        logger.debug(f"Skipping duplicate announcement (no company, no date): headline='{news_headline[:50]}...'")
+                        logger.debug(f"Skipping duplicate announcement (no company, no date, headline+symbol): headline='{news_headline[:50]}...'")
                         return False
             
             # Also check if ID already exists (for backward compatibility)
@@ -311,6 +366,14 @@ class AnnouncementsService:
                 announcement.get("date_of_meeting")
             ])
             
+            conn.commit()
+            logger.info(f"Inserted announcement: {announcement.get('id')}")
+            
+            # Broadcast new announcement via WebSocket (fire and forget)
+            # This will be handled by the WebSocket service when it processes announcements
+            # We don't broadcast here directly to avoid event loop issues
+            # The announcements_websocket_service will handle broadcasting when it receives new announcements
+            
             return True
         except Exception as e:
             logger.error(f"Error inserting announcement: {e}", exc_info=True)
@@ -332,6 +395,7 @@ class AnnouncementsService:
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
         symbol: Optional[str] = None,
+        search: Optional[str] = None,
         limit: Optional[int] = None,
         offset: int = 0,
         page: Optional[int] = None,
@@ -344,6 +408,7 @@ class AnnouncementsService:
             from_date: Filter from date (YYYY-MM-DD)
             to_date: Filter to date (YYYY-MM-DD)
             symbol: Filter by symbol (NSE or BSE)
+            search: Search by headline or symbol (flexible/fuzzy match)
             limit: Maximum number of records (legacy, use page_size instead)
             offset: Offset for pagination (legacy, use page instead)
             page: Page number (1-indexed)
@@ -375,10 +440,25 @@ class AnnouncementsService:
                 count_params.append(to_date + " 23:59:59")
             
             if symbol:
-                query += " AND (symbol_nse = ? OR symbol_bse = ?)"
-                count_query += " AND (symbol_nse = ? OR symbol_bse = ?)"
-                params.extend([symbol, symbol])
-                count_params.extend([symbol, symbol])
+                # Fuzzy/similarity search for symbol and company name (case-insensitive, partial match)
+                symbol_lower = symbol.lower().strip()
+                # Use LIKE for partial matching on symbols and company name
+                query += " AND (LOWER(symbol_nse) LIKE ? OR LOWER(symbol_bse) LIKE ? OR CAST(script_code AS VARCHAR) LIKE ? OR LOWER(company_name) LIKE ?)"
+                count_query += " AND (LOWER(symbol_nse) LIKE ? OR LOWER(symbol_bse) LIKE ? OR CAST(script_code AS VARCHAR) LIKE ? OR LOWER(company_name) LIKE ?)"
+                # Use % for partial matching (wildcard)
+                symbol_pattern = f"%{symbol_lower}%"
+                params.extend([symbol_pattern, symbol_pattern, symbol_pattern, symbol_pattern])
+                count_params.extend([symbol_pattern, symbol_pattern, symbol_pattern, symbol_pattern])
+            
+            if search:
+                # Flexible search: headline or symbol (case-insensitive, partial match)
+                search_lower = search.lower().strip()
+                search_pattern = f"%{search_lower}%"
+                # Search in headline, NSE symbol, BSE symbol, and script_code
+                query += " AND (LOWER(news_headline) LIKE ? OR LOWER(symbol_nse) LIKE ? OR LOWER(symbol_bse) LIKE ? OR CAST(script_code AS VARCHAR) LIKE ?)"
+                count_query += " AND (LOWER(news_headline) LIKE ? OR LOWER(symbol_nse) LIKE ? OR LOWER(symbol_bse) LIKE ? OR CAST(script_code AS VARCHAR) LIKE ?)"
+                params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
+                count_params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
             
             # Get total count (before deduplication - will be adjusted after)
             total_result = conn.execute(count_query, count_params).fetchone()
@@ -407,7 +487,10 @@ class AnnouncementsService:
             result = cursor.fetchall()
             
             announcements = []
-            seen_keys = set()  # Track seen combinations for deduplication
+            seen_ids = set()  # Track seen IDs to prevent true duplicates
+            skipped_count = 0
+            
+            logger.info(f"Processing {len(result)} rows from database query")
             
             for row in result:
                 ann = dict(zip(columns, row))
@@ -425,46 +508,25 @@ class AnnouncementsService:
                             # Try to convert to string
                             ann[key] = str(ann[key]) if ann[key] is not None else None
                 
-                # Deduplicate announcements without company_name based on headline + trade_date
-                company_name = ann.get("company_name")
-                news_headline = ann.get("news_headline")
-                trade_date = ann.get("trade_date")
+                ann_id = ann.get("id")
                 
-                # If no company_name but headline is present, check for duplicates
-                if (not company_name or str(company_name).strip() == '') and news_headline:
-                    # Create a unique key for deduplication: headline + date
-                    headline_normalized = str(news_headline).strip().lower()
-                    # Extract date part from trade_date
-                    date_part = None
-                    if trade_date:
-                        try:
-                            if isinstance(trade_date, str):
-                                date_part = trade_date.split(' ')[0].split('T')[0]
-                            else:
-                                date_part = str(trade_date).split(' ')[0].split('T')[0]
-                        except:
-                            date_part = str(trade_date)
-                    
-                    dedup_key = f"{headline_normalized}|{date_part}" if date_part else headline_normalized
-                    
-                    # Skip if we've already seen this combination
-                    if dedup_key in seen_keys:
-                        logger.debug(f"Skipping duplicate announcement in display: headline='{news_headline[:50]}...', date='{date_part}'")
-                        continue
-                    
-                    seen_keys.add(dedup_key)
+                # Only skip if we've seen this exact ID before (true duplicate)
+                # This can happen if there's a bug in data insertion, but should be rare
+                if ann_id in seen_ids:
+                    skipped_count += 1
+                    logger.warning(f"Skipping duplicate ID announcement: ID={ann_id}")
+                    continue
                 
+                seen_ids.add(ann_id)
+                
+                # Include all announcements - don't filter by headline/date
+                # Different announcements can have the same headline (e.g., mutual fund NAV declarations)
                 announcements.append(ann)
             
-            # Adjust total count: subtract duplicates that were filtered out
-            # For accurate pagination, we need to count deduplicated records
-            # Since we can't easily do this in SQL, we'll use the actual count of returned announcements
-            # and adjust the total based on the ratio
-            # However, for simplicity, we'll use the deduplicated count as the total
-            # This means pagination might be slightly off, but it's more accurate than including duplicates
-            total = len(announcements) if len(announcements) < total_before_dedup else total_before_dedup
+            # Use the actual database count for pagination
+            total = total_before_dedup
             
-            logger.debug(f"Retrieved {len(announcements)} announcements (after deduplication), total before dedup: {total_before_dedup}, total after: {total}")
+            logger.info(f"Retrieved {len(announcements)} announcements (skipped {skipped_count} duplicate IDs), total in DB: {total_before_dedup}")
             return announcements, total
         finally:
             conn.close()

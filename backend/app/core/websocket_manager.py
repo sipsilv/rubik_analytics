@@ -82,6 +82,28 @@ class WebSocketManager:
         for connection in disconnected:
             self.disconnect(connection)
     
+    async def broadcast_announcement(self, announcement: dict):
+        """Broadcast a new announcement to all connected clients"""
+        message = {
+            "type": "announcement",
+            "event": "new_announcement",
+            "data": announcement
+        }
+        
+        # Broadcast to all connected clients
+        disconnected = set()
+        for user_connections in self.active_connections.values():
+            for connection in user_connections:
+                try:
+                    await connection.send_json(message)
+                except Exception as e:
+                    print(f"[WebSocket] Error broadcasting announcement: {e}")
+                    disconnected.add(connection)
+        
+        # Clean up disconnected connections
+        for connection in disconnected:
+            self.disconnect(connection)
+    
     async def cleanup_stale_connections(self):
         """Periodically clean up stale connections"""
         while True:

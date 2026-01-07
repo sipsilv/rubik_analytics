@@ -165,6 +165,7 @@ class AnnouncementsWebSocketService:
                 return
             
             # Insert into database (id-based de-duplication)
+            # The insert_announcement method will handle WebSocket broadcasting
             inserted = service.insert_announcement(announcement)
             
             if inserted:

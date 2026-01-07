@@ -5,7 +5,8 @@ import { Card } from '@/components/ui/Card'
 import { Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { announcementsAPI } from '@/lib/api'
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronRight as ChevronRightIcon, Eye, Download, AlertCircle, Radio } from 'lucide-react'
+import { useAnnouncementsWebSocket } from '@/lib/useAnnouncementsWebSocket'
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronRight as ChevronRightIcon, Eye, Download, AlertCircle, Radio, Search, Calendar } from 'lucide-react'
 
 interface Link {
   title?: string
@@ -60,24 +61,70 @@ export default function AnnouncementsPage() {
   const [pageSize, setPageSize] = useState(25)
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
-
-  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Search state (input values)
+  const [searchInput, setSearchInput] = useState('')
+  const [searchFromDateInput, setSearchFromDateInput] = useState('')
+  const [searchToDateInput, setSearchToDateInput] = useState('')
+  
+  // Active filter state (applied filters)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchFromDate, setSearchFromDate] = useState('')
+  const [searchToDate, setSearchToDate] = useState('')
+  
+  // WebSocket for real-time updates
+  const { isConnected: wsConnected } = useAnnouncementsWebSocket((newAnnouncement) => {
+    // Add new announcement to the top of the list (only if on first page and no filters)
+    if (page === 1 && !searchQuery && !searchFromDate && !searchToDate) {
+      setAnnouncements(prev => {
+        // Check if announcement already exists (avoid duplicates)
+        const exists = prev.some(ann => ann.id === newAnnouncement.id)
+        if (exists) {
+          return prev
+        }
+        // Add to top and update total
+        setTotal(prevTotal => prevTotal + 1)
+        return [newAnnouncement, ...prev]
+      })
+      setLastRefresh(new Date())
+    }
+  })
 
   useEffect(() => {
     loadAnnouncements()
-    
-    // Auto-refresh every 10 seconds
-    refreshIntervalRef.current = setInterval(() => {
-      loadAnnouncements()
-    }, 10000) // 10 seconds
-
-    return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current)
-      }
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize])
+  }, [page, pageSize, searchQuery, searchFromDate, searchToDate])
+
+  // Handle search button click
+  const handleSearch = () => {
+    setSearchQuery(searchInput)
+    setSearchFromDate(searchFromDateInput)
+    setSearchToDate(searchToDateInput)
+    setPage(1) // Reset to first page on search
+  }
+
+  // Handle clear all
+  const handleClearAll = () => {
+    setSearchInput('')
+    setSearchFromDateInput('')
+    setSearchToDateInput('')
+    setSearchQuery('')
+    setSearchFromDate('')
+    setSearchToDate('')
+    setPage(1)
+    loadAnnouncements()
+  }
+
+  // Debug: Log when announcements state changes
+  useEffect(() => {
+    console.log('Announcements state changed:', {
+      count: announcements.length,
+      total: total,
+      loading: loading,
+      error: error,
+      firstAnnouncement: announcements[0] || null
+    })
+  }, [announcements, total, loading, error])
 
   // Close links menu when clicking outside
   useEffect(() => {
@@ -99,17 +146,66 @@ export default function AnnouncementsPage() {
       setLoading(true)
       setError(null)
 
-      const response = await announcementsAPI.getAnnouncements({
+      const params: any = {
         page: page,
         page_size: pageSize
-      })
+      }
+      
+      // Add search filters - backend will search entire database
+      if (searchQuery && searchQuery.trim()) {
+        params.search = searchQuery.trim()
+      }
+      if (searchFromDate) {
+        params.from_date = searchFromDate
+      }
+      if (searchToDate) {
+        params.to_date = searchToDate
+      }
+
+      const response = await announcementsAPI.getAnnouncements(params)
       
       console.log('API Response:', response)
+      console.log('API Response type:', typeof response)
+      console.log('API Response keys:', Object.keys(response || {}))
+      console.log('Announcements array:', response.announcements)
+      console.log('Announcements type:', Array.isArray(response.announcements))
+      console.log('Total:', response.total)
       
-      const data = response.announcements || []
+      // Handle different response structures
+      let data: Announcement[] = []
+      if (response && response.announcements) {
+        if (Array.isArray(response.announcements)) {
+          data = response.announcements
+        } else {
+          console.warn('response.announcements is not an array:', response.announcements)
+          data = []
+        }
+      } else if (response && Array.isArray(response)) {
+        // Response might be the array directly
+        data = response
+      } else {
+        console.warn('Unexpected response structure:', response)
+        data = []
+      }
+      
+      console.log('Setting announcements data:', data)
+      console.log('Data length:', data.length)
+      
+      if (data.length > 0) {
+        console.log('First announcement:', data[0])
+        console.log('First announcement type:', typeof data[0])
+        console.log('First announcement keys:', Object.keys(data[0] || {}))
+        console.log('First announcement trade_date:', data[0].trade_date)
+        console.log('First announcement trade_date type:', typeof data[0].trade_date)
+      } else {
+        console.warn('No announcements in data array, but total might be:', response.total)
+      }
+      
+      // Backend handles all search filtering - no client-side filtering needed
       setAnnouncements(data)
       setTotal(response.total || 0)
-      setTotalPages(response.total_pages || Math.ceil((response.total || 0) / pageSize))
+      setTotalPages(response.total_pages || Math.ceil((response.total || 0) / pageSize) || 1)
+      
       setLastRefresh(new Date())
     } catch (err: any) {
       console.error('Error:', err)
@@ -123,7 +219,42 @@ export default function AnnouncementsPage() {
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return { date: 'N/A', time: '' }
     try {
-      const date = new Date(dateStr)
+      // Handle multiple date formats
+      let date: Date
+      
+      if (typeof dateStr === 'string') {
+        // Try parsing as ISO string first
+        date = new Date(dateStr)
+        
+        // If invalid, try other formats
+        if (isNaN(date.getTime())) {
+          // Try parsing with explicit timezone handling
+          // Remove timezone info and add Z for UTC if no timezone specified
+          let normalizedDateStr = dateStr.trim()
+          if (!normalizedDateStr.includes('T')) {
+            // If no time component, add midnight
+            normalizedDateStr = normalizedDateStr + 'T00:00:00'
+          }
+          if (!normalizedDateStr.includes('Z') && !normalizedDateStr.match(/[+-]\d{2}:\d{2}$/)) {
+            // No timezone, treat as UTC
+            normalizedDateStr = normalizedDateStr + 'Z'
+          }
+          date = new Date(normalizedDateStr)
+        }
+        
+        // If still invalid, return the string as-is
+        if (isNaN(date.getTime())) {
+          console.warn('Failed to parse date:', dateStr)
+          return { date: dateStr, time: '' }
+        }
+      } else {
+        date = new Date(dateStr)
+        if (isNaN(date.getTime())) {
+          console.warn('Failed to parse date:', dateStr)
+          return { date: String(dateStr), time: '' }
+        }
+      }
+      
       const day = String(date.getDate()).padStart(2, '0')
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
       const month = monthNames[date.getMonth()]
@@ -137,8 +268,9 @@ export default function AnnouncementsPage() {
       const timePart = `${String(displayHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`
       
       return { date: datePart, time: timePart }
-    } catch {
-      return { date: dateStr, time: '' }
+    } catch (error) {
+      console.error('Error formatting date:', dateStr, error)
+      return { date: String(dateStr || 'N/A'), time: '' }
     }
   }
 
@@ -382,26 +514,95 @@ export default function AnnouncementsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-sans font-semibold text-text-primary">
-              Corporate Announcements
-            </h1>
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-success/10 rounded-full">
-              <Radio className="w-3 h-3 text-success animate-pulse" />
-              <span className="text-[10px] font-sans text-success font-medium uppercase tracking-wider">LIVE</span>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-2xl font-sans font-semibold text-text-primary">
+                Corporate Announcements
+              </h1>
+              <div className="flex items-center gap-1.5 px-2 py-0.5 bg-success/10 rounded-full">
+                <Radio className={`w-3 h-3 text-success ${wsConnected ? 'animate-pulse' : ''}`} />
+                <span className="text-[10px] font-sans text-success font-medium uppercase tracking-wider">
+                  {wsConnected ? 'LIVE' : 'OFFLINE'}
+                </span>
+              </div>
+            </div>
+            <p className="text-xs font-sans text-text-secondary">
+              Real-time corporate announcements
+              {lastRefresh && (
+                <span className="ml-2">
+                  • Last updated: {lastRefresh.toLocaleTimeString()}
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+        
+        {/* Search and Filters */}
+        <div className="flex flex-wrap items-center gap-3 p-4 bg-panel border border-border rounded">
+          {/* Search Input */}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-secondary" />
+            <input
+              type="text"
+              placeholder="Search by headline or symbol"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleSearch()
+                }
+              }}
+              className="w-full pl-8 pr-3 py-2 text-sm border border-border rounded bg-background text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+
+          {/* Search Button */}
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSearch}
+            className="px-4 whitespace-nowrap"
+          >
+            Search
+          </Button>
+
+          {/* Date Range */}
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <input
+                type="date"
+                value={searchFromDateInput}
+                onChange={(e) => setSearchFromDateInput(e.target.value)}
+                className="px-3 py-2 pr-8 text-sm border border-border rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/30 [color-scheme:light]"
+                title="From Date"
+              />
+              <Calendar className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+            </div>
+            <span className="text-text-secondary text-sm">to</span>
+            <div className="relative">
+              <input
+                type="date"
+                value={searchToDateInput}
+                onChange={(e) => setSearchToDateInput(e.target.value)}
+                className="px-3 py-2 pr-8 text-sm border border-border rounded bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/30 [color-scheme:light]"
+                title="To Date"
+              />
+              <Calendar className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
             </div>
           </div>
-          <p className="text-xs font-sans text-text-secondary">
-            Real-time corporate announcements
-            {lastRefresh && (
-              <span className="ml-2">
-                • Last updated: {lastRefresh.toLocaleTimeString()}
-              </span>
-            )}
-          </p>
+
+          {/* Clear All Button - Always visible when any filter is active */}
+          {(searchQuery || searchFromDate || searchToDate || searchInput || searchFromDateInput || searchToDateInput) && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleClearAll}
+              className="px-4 whitespace-nowrap"
+            >
+              Clear All
+            </Button>
+          )}
         </div>
-      </div>
 
       {/* Announcements Table */}
       <Card compact>
@@ -433,7 +634,7 @@ export default function AnnouncementsPage() {
             ) : announcements.length === 0 ? (
               <TableRow index={0}>
                 <TableCell colSpan={6} className="text-center py-8 text-text-secondary">
-                  {`No data (Total: ${total})`}
+                  {`No data (Total: ${total}, Announcements length: ${announcements.length})`}
                 </TableCell>
               </TableRow>
             ) : announcements.map((ann, index) => {

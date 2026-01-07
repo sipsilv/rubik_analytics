@@ -694,6 +694,7 @@ export const announcementsAPI = {
     from_date?: string
     to_date?: string
     symbol?: string
+    search?: string
     limit?: number
     offset?: number
     page?: number
