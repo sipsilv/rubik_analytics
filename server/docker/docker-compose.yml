@@ -87,19 +87,29 @@ services:
           cpus: '0.25'
           memory: 256M
 
+
   watchtower:
-    image: containrrr/watchtower
+    image: containrrr/watchtower:latest
     container_name: watchtower
+    # Mount the Docker socket so watchtower can interact with the Docker daemon
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: >
-      --interval ${WATCHTOWER_INTERVAL}
-      --cleanup
-      --notifications slack
     environment:
-      WATCHTOWER_NOTIFICATIONS_SLACK_HOOK_URL: ${SLACK_WEBHOOK_URL}
-      WATCHTOWER_NOTIFICATIONS_SLACK_IDENTIFIER: "🚀 Rubik Deploy"
+      - DOCKER_API_VERSION=1.44
+      # Enable Slack notifications
+      - WATCHTOWER_NOTIFICATIONS=slack 
+      # Paste your Slack webhook URL here
+      - WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL=${SLACK_WEBHOOK_URL}
+      # Optional: Set the notification level (info, verbose, debug)
+      - WATCHTOWER_NOTIFICATIONS_LEVEL=info
+      # Optional: Add an identifier to your notifications (e.g., the server name)
+      - WATCHTOWER_NOTIFICATION_SLACK_IDENTIFIER=Rubik
+      # Optional: Poll for updates every 30 minutes (1800 seconds)
+      - WATCHTOWER_POLL_INTERVAL=600
+      # Optional: Remove old images after updating
+      - WATCHTOWER_CLEANUP=true
     restart: unless-stopped
+
 
 networks:
   rubik-network:
