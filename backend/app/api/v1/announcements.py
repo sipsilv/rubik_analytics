@@ -414,10 +414,26 @@ async def get_announcement_attachment(
     except HTTPException:
         raise
     except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 404:
+        # Check if this is a "file not found" error
+        # TrueData API sometimes returns 500 with "File does not exist" instead of 404
+        is_not_found = False
+        if e.response:
+            if e.response.status_code == 404:
+                is_not_found = True
+            elif e.response.status_code == 500:
+                # Check if marked as file not found or if error message indicates file not found
+                if hasattr(e, 'is_file_not_found') and e.is_file_not_found:
+                    is_not_found = True
+                else:
+                    error_text = e.response.text if hasattr(e.response, 'text') else str(e.response)
+                    if "File does not exist" in error_text or "file does not exist" in error_text.lower():
+                        is_not_found = True
+        
+        if is_not_found:
             raise HTTPException(status_code=404, detail=f"Attachment not found for announcement {announcement_id}")
+        
         logger.error(f"HTTP error getting attachment: {e}")
-        raise HTTPException(status_code=e.response.status_code, detail=f"Error fetching attachment: {str(e)}")
+        raise HTTPException(status_code=e.response.status_code if e.response else 500, detail=f"Error fetching attachment: {str(e)}")
     except Exception as e:
         logger.error(f"Error getting attachment: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error fetching attachment: {str(e)}")

@@ -430,6 +430,20 @@ class TrueDataAPIService:
                     response.raise_for_status()
                     return response
             
+            # Check if TrueData API returns 500 with "File does not exist" - treat as 404
+            # This happens when TrueData API returns 500 instead of 404 for missing files
+            if e.response:
+                error_text = e.response.text if hasattr(e.response, 'text') else str(e.response)
+                error_lower = error_text.lower()
+                
+                # Check if error indicates file not found (500 with "file does not exist" message)
+                if e.response.status_code == 500 and "file does not exist" in error_lower:
+                    logger.warning(f"Attachment {announcement_id} not found (TrueData returned 500 with 'File does not exist')")
+                    # Re-raise as HTTPError - we'll handle it in the API endpoint
+                    # Set a custom attribute to mark this as a "not found" error
+                    e.is_file_not_found = True
+                    raise e
+            
             logger.error(f"HTTP error fetching attachment {announcement_id}: {e.response.status_code} - {e.response.text[:200]}")
             raise
         except Exception as e:
