@@ -459,13 +459,46 @@ class AnnouncementsService:
                 
                 announcements.append(ann)
             
-            # Adjust total count: subtract duplicates that were filtered out
-            # For accurate pagination, we need to count deduplicated records
-            # Since we can't easily do this in SQL, we'll use the actual count of returned announcements
-            # and adjust the total based on the ratio
-            # However, for simplicity, we'll use the deduplicated count as the total
-            # This means pagination might be slightly off, but it's more accurate than including duplicates
-            total = len(announcements) if len(announcements) < total_before_dedup else total_before_dedup
+            # Calculate accurate total count after deduplication
+            # If we got fewer announcements than requested, we need to count all unique announcements
+            # For announcements without company_name, we need to count unique headline+date combinations
+            if len(announcements) < (limit or total_before_dedup) and total_before_dedup > len(announcements):
+                # We may have filtered duplicates, so let's get a more accurate count
+                # Count unique announcements (for those without company_name, count unique headline+date)
+                try:
+                    # Build a query to count unique announcements
+                    unique_count_query = """
+                        SELECT COUNT(DISTINCT 
+                            CASE 
+                                WHEN (company_name IS NULL OR TRIM(company_name) = '') AND news_headline IS NOT NULL THEN
+                                    LOWER(TRIM(news_headline)) || '|' || DATE(trade_date)
+                                ELSE
+                                    id
+                            END
+                        ) FROM corporate_announcements WHERE 1=1
+                    """
+                    unique_count_params = count_params.copy()
+                    
+                    # Apply same filters
+                    if from_date:
+                        unique_count_query += " AND trade_date >= ?"
+                        unique_count_params.append(from_date)
+                    if to_date:
+                        unique_count_query += " AND trade_date <= ?"
+                        unique_count_params.append(to_date + " 23:59:59")
+                    if symbol:
+                        unique_count_query += " AND (symbol_nse = ? OR symbol_bse = ?)"
+                        unique_count_params.extend([symbol, symbol])
+                    
+                    unique_total_result = conn.execute(unique_count_query, unique_count_params).fetchone()
+                    total = unique_total_result[0] if unique_total_result else len(announcements)
+                except Exception as e:
+                    logger.warning(f"Error calculating unique count, using deduplicated result count: {e}")
+                    # Fallback: use the count of deduplicated results we got
+                    total = len(announcements) if len(announcements) < total_before_dedup else total_before_dedup
+            else:
+                # We got all results (or more than expected), use the count we have
+                total = len(announcements) if len(announcements) < total_before_dedup else total_before_dedup
             
             logger.debug(f"Retrieved {len(announcements)} announcements (after deduplication), total before dedup: {total_before_dedup}, total after: {total}")
             return announcements, total
