@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
   workflow_dispatch:
 
@@ -21,7 +21,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-        
+
       - name: Login to GHCR
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
@@ -43,3 +43,23 @@ jobs:
             -t ghcr.io/${{ github.repository_owner }}/rubik-frontend:latest \
             .
           docker push ghcr.io/${{ github.repository_owner }}/rubik-frontend:latest
+
+      # ✅ SUCCESS NOTIFICATION
+      - name: Slack Notify Success
+        if: success()
+        run: |
+          curl -X POST -H "Content-type: application/json" \
+          --data '{
+            "text": "✅ *Rubik Build Successful*\n• Backend & Frontend pushed to GHCR\n• Branch: `${{ github.ref_name }}`\n• Commit: `${{ github.sha }}`\n• By: `${{ github.actor }}`\n\n🚀 Watchtower will deploy shortly."
+          }' \
+          ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      # ❌ FAILURE NOTIFICATION
+      - name: Slack Notify Failure
+        if: failure()
+        run: |
+          curl -X POST -H "Content-type: application/json" \
+          --data '{
+            "text": "❌ *Rubik Build Failed*\n• Branch: `${{ github.ref_name }}`\n• Commit: `${{ github.sha }}`\n\n🔍 Check GitHub Actions logs immediately."
+          }' \
+          ${{ secrets.SLACK_WEBHOOK_URL }}
