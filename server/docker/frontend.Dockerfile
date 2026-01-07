@@ -1,9 +1,15 @@
+# ---------------- base ----------------
 FROM node:18-bookworm-slim AS base
 
 # ---------------- deps ----------------
 FROM base AS deps
-RUN apk add --no-cache libc6-compat wget
 WORKDIR /app
+
+# Install system dependencies (Debian uses apt, NOT apk)
+RUN apt-get update && apt-get install -y \
+    wget \
+    libc6 \
+ && rm -rf /var/lib/apt/lists/*
 
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
@@ -35,13 +41,16 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Install wget for healthcheck
-RUN apk add --no-cache wget
+# Install wget for healthcheck (Debian)
+RUN apt-get update && apt-get install -y \
+    wget \
+ && rm -rf /var/lib/apt/lists/*
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs \
+ && adduser --system --uid 1001 nextjs
 
-# Standalone output (NOW THESE PATHS EXIST)
+# Standalone output
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
