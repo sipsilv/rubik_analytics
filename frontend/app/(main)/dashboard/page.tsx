@@ -21,6 +21,7 @@ interface Announcement {
   announcement_datetime: string
   received_at: string
   attachment_id: string | null
+  link: string | null
   company_name: string | null
   price?: number
   price_change?: number
@@ -43,6 +44,10 @@ export default function DashboardPage() {
 
   // Expanded rows state
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  
+  // Track which descriptions are actually truncated (need show more button)
+  const [truncatedDescriptions, setTruncatedDescriptions] = useState<Set<string>>(new Set())
+  const descriptionRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   // Live update state
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null)
@@ -303,6 +308,50 @@ export default function DashboardPage() {
       return newSet
     })
   }
+
+  // Check truncation for all descriptions after render
+  useEffect(() => {
+    // Use a small delay to ensure DOM is fully rendered
+    const timeoutId = setTimeout(() => {
+      const newTruncated = new Set<string>()
+      
+      descriptionRefs.current.forEach((element, id) => {
+        // Skip if row is expanded
+        if (expandedRows.has(id)) {
+          return
+        }
+        
+        if (element) {
+          // Check if content is actually truncated (scrollHeight > clientHeight)
+          const isTruncated = element.scrollHeight > element.clientHeight
+          if (isTruncated) {
+            newTruncated.add(id)
+          }
+        }
+      })
+      
+      // Only update state if there's a change
+      setTruncatedDescriptions(prev => {
+        // Check if sets are different
+        if (prev.size !== newTruncated.size) {
+          return newTruncated
+        }
+        for (const id of prev) {
+          if (!newTruncated.has(id)) {
+            return newTruncated
+          }
+        }
+        for (const id of newTruncated) {
+          if (!prev.has(id)) {
+            return newTruncated
+          }
+        }
+        return prev // No change
+      })
+    }, 150)
+
+    return () => clearTimeout(timeoutId)
+  }, [announcements, expandedRows])
 
   // Generate page numbers with ellipsis (same as symbols page)
   const getPageNumbers = () => {
@@ -613,7 +662,7 @@ export default function DashboardPage() {
                       <TableHeaderCell className="w-32">Symbol</TableHeaderCell>
                       <TableHeaderCell className="min-w-[400px] max-w-none">Headline</TableHeaderCell>
                       <TableHeaderCell className="w-32">Category</TableHeaderCell>
-                      <TableHeaderCell className="w-32">Attachment</TableHeaderCell>
+                      <TableHeaderCell className="w-40">Attachment & Link</TableHeaderCell>
                     </TableHeader>
                     <TableBody>
                       {announcements.map((announcement, index) => {
@@ -686,52 +735,46 @@ export default function DashboardPage() {
                             </TableCell>
                             <TableCell className="text-sm text-text-primary">
                               <div>
-                                {announcement.attachment_id &&
-                                  announcement.attachment_id.trim() &&
-                                  announcement.attachment_id.trim() !== '' &&
-                                  announcement.attachment_id.trim() toLowerCase() !== 'null' &&
-                                announcement.attachment_id.trim().toLowerCase() !== 'none' ? (
-                                <button
-                                  onClick={() => handleDownloadAttachment(announcement.announcement_id)}
-                                  className="font-medium break-words whitespace-normal overflow-wrap-anywhere text-left hover:text-primary transition-colors cursor-pointer group flex items-start gap-1.5 w-full"
-                                  title="Click to download attachment"
-                                >
-                                  <span className="group-hover:underline">
-                                    {announcement.headline && announcement.headline.trim() ? announcement.headline : '-'}
-                                  </span>
-                                  <ExternalLink className="w-3.5 h-3.5 text-primary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
-                                </button>
-                                ) : (
                                 <div className="font-medium break-words whitespace-normal overflow-wrap-anywhere">
                                   {announcement.headline && announcement.headline.trim() ? announcement.headline : '-'}
                                 </div>
-                                )}
                                 {announcement.description && (
                                   <div className="mt-1">
-                                    <div className={`text-xs text-text-secondary transition-all duration-200 ${isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'
-                                      }`}>
+                                    <div 
+                                      ref={(el) => {
+                                        if (el) {
+                                          descriptionRefs.current.set(announcement.announcement_id, el)
+                                        } else {
+                                          descriptionRefs.current.delete(announcement.announcement_id)
+                                        }
+                                      }}
+                                      className={`text-xs text-text-secondary transition-all duration-200 ${isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'
+                                        }`}
+                                    >
                                       {announcement.description}
                                     </div>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        toggleRowExpansion(announcement.announcement_id)
-                                      }}
-                                      className="mt-1 text-xs text-primary hover:text-primary/80 hover:underline flex items-center gap-1 transition-colors"
-                                      title={isExpanded ? 'Collapse description' : 'Expand description'}
-                                    >
-                                      {isExpanded ? (
-                                        <>
-                                          <ChevronUp className="w-3 h-3" />
-                                          <span>Show less</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <ChevronDown className="w-3 h-3" />
-                                          <span>Show more</span>
-                                        </>
-                                      )}
-                                    </button>
+                                    {(isExpanded || truncatedDescriptions.has(announcement.announcement_id)) && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          toggleRowExpansion(announcement.announcement_id)
+                                        }}
+                                        className="mt-1 text-xs text-primary hover:text-primary/80 hover:underline flex items-center gap-1 transition-colors"
+                                        title={isExpanded ? 'Collapse description' : 'Expand description'}
+                                      >
+                                        {isExpanded ? (
+                                          <>
+                                            <ChevronUp className="w-3 h-3" />
+                                            <span>Show less</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <ChevronDown className="w-3 h-3" />
+                                            <span>Show more</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -740,22 +783,48 @@ export default function DashboardPage() {
                               {announcement.category || '-'}
                             </TableCell>
                             <TableCell className="text-sm">
-                              {announcement.attachment_id &&
-                                announcement.attachment_id.trim() &&
-                                announcement.attachment_id.trim() !== '' &&
-                                announcement.attachment_id.trim().toLowerCase() !== 'null' &&
-                                announcement.attachment_id.trim().toLowerCase() !== 'none' ? (
-                                <button
-                                  onClick={() => handleDownloadAttachment(announcement.announcement_id)}
-                                  className="text-primary hover:text-primary/80 hover:underline flex items-center gap-1.5 transition-colors"
-                                  title="Download attachment"
-                                >
-                                  <Download className="w-4 h-4" />
-                                  <span className="text-xs">Download</span>
-                                </button>
-                              ) : (
-                                <span className="text-xs text-text-secondary">-</span>
-                              )}
+                              <div className="flex items-center gap-3">
+                                {announcement.attachment_id &&
+                                  announcement.attachment_id.trim() &&
+                                  announcement.attachment_id.trim() !== '' &&
+                                  announcement.attachment_id.trim().toLowerCase() !== 'null' &&
+                                  announcement.attachment_id.trim().toLowerCase() !== 'none' ? (
+                                  <button
+                                    onClick={() => handleDownloadAttachment(announcement.announcement_id)}
+                                    className="text-primary hover:text-primary/80 hover:underline flex items-center gap-1.5 transition-colors"
+                                    title="Download attachment"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                    <span className="text-xs">Download</span>
+                                  </button>
+                                ) : null}
+                                {announcement.link &&
+                                  announcement.link.trim() &&
+                                  announcement.link.trim() !== '' &&
+                                  announcement.link.trim().toLowerCase() !== 'null' &&
+                                  announcement.link.trim().toLowerCase() !== 'none' ? (
+                                  <a
+                                    href={announcement.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary hover:text-primary/80 hover:underline flex items-center gap-1.5 transition-colors"
+                                    title="Open link in new tab"
+                                  >
+                                    <ExternalLink className="w-4 h-4" />
+                                    <span className="text-xs">Open</span>
+                                  </a>
+                                ) : null}
+                                {(!announcement.attachment_id || 
+                                  announcement.attachment_id.trim() === '' ||
+                                  announcement.attachment_id.trim().toLowerCase() === 'null' ||
+                                  announcement.attachment_id.trim().toLowerCase() === 'none') &&
+                                 (!announcement.link ||
+                                  announcement.link.trim() === '' ||
+                                  announcement.link.trim().toLowerCase() === 'null' ||
+                                  announcement.link.trim().toLowerCase() === 'none') && (
+                                  <span className="text-xs text-text-secondary">-</span>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         )

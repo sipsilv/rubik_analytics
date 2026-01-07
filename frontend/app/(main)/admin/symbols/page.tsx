@@ -909,7 +909,15 @@ function SymbolsPageContent() {
                                 </TableRow>
                             ) : (
                                 <>
-                                    {symbols.map((sym, i) => (
+                                    {symbols.map((sym, i) => {
+                                        // Find all exchanges for this trading_symbol
+                                        const allExchanges = symbols
+                                            .filter(s => s.trading_symbol === sym.trading_symbol && s.exchange)
+                                            .map(s => s.exchange)
+                                            .filter((ex, idx, arr) => arr.indexOf(ex) === idx) // Remove duplicates
+                                            .sort() // Sort alphabetically (BSE, NSE)
+                                        
+                                        return (
                                         <TableRow key={sym.id || i} index={i} className={selectedIds.includes(sym.id) ? 'bg-primary/5' : ''}>
                                             <TableCell>
                                                 <input type="checkbox"
@@ -919,8 +927,21 @@ function SymbolsPageContent() {
                                                 />
                                             </TableCell>
                                             <TableCell>
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-xs">{sym.exchange || '-'}</span>
+                                                <div className="flex flex-col gap-0.5">
+                                                    <div className="flex items-center gap-1 flex-wrap">
+                                                        {allExchanges.length > 0 ? (
+                                                            <>
+                                                                {allExchanges.map((ex, idx) => (
+                                                                    <span key={idx}>
+                                                                        <span className="font-bold text-xs text-primary">{ex}</span>
+                                                                        {idx < allExchanges.length - 1 && <span className="text-text-secondary mx-1">/</span>}
+                                                                    </span>
+                                                                ))}
+                                                            </>
+                                                        ) : (
+                                                            <span className="font-bold text-xs">{sym.exchange || '-'}</span>
+                                                        )}
+                                                    </div>
                                                     {sym.exchange_token && <span className="text-[10px] text-text-muted">{sym.exchange_token}</span>}
                                                 </div>
                                             </TableCell>
@@ -1028,7 +1049,8 @@ function SymbolsPageContent() {
                                                 )}
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                        )
+                                    })}
                                     {symbols.length === 0 && !loading && (
                                         <TableRow>
                                             <td colSpan={14} className="px-3 py-12 text-center">
