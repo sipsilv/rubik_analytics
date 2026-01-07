@@ -450,11 +450,10 @@ async def startup_event():
             conn.commit()
             conn.close()
             
-            # Start announcements manager
-            from app.services.announcements_manager import get_announcements_manager
-            manager = get_announcements_manager()
-            manager.start()
-            print("[OK] Corporate Announcements service started")
+            # Initialize announcements service
+            from app.services.announcements_service import get_announcements_service
+            service = get_announcements_service()
+            print("[OK] Corporate Announcements service initialized")
             
             # Start WebSocket workers for enabled TrueData connections
             try:
@@ -470,7 +469,7 @@ async def startup_event():
                     
                     for conn in enabled_truedata_conns:
                         try:
-                            manager.start_worker(conn.id)
+                            service.start_worker(conn.id)
                             print(f"[OK] Started WebSocket worker for TrueData connection {conn.id} ({conn.name})")
                         except Exception as e:
                             print(f"[WARNING] Failed to start WebSocket worker for connection {conn.id}: {e}")

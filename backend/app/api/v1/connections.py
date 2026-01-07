@@ -654,7 +654,7 @@ async def update_connection(
     # Restart WebSocket worker if TrueData connection credentials were updated
     if is_truedata and update_data.details and (update_data.details.get("username") or update_data.details.get("password")):
         try:
-            from app.services.announcements_manager import get_announcements_manager
+            from app.services.announcements_service import get_announcements_manager
             manager = get_announcements_manager()
             # Stop existing worker if running (no error if not found)
             manager.stop_worker(id)
@@ -750,7 +750,7 @@ async def toggle_connection(
     
     # Control WebSocket worker for TrueData connections
     if conn.provider == "TrueData":
-        from app.services.announcements_manager import get_announcements_manager
+        from app.services.announcements_service import get_announcements_manager
         manager = get_announcements_manager()
         
         if conn.is_enabled:
