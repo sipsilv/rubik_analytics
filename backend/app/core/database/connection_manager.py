@@ -269,6 +269,9 @@ class ConnectionManager:
             return DuckDBClient(config)
         elif conn_type == "duckdb_sqlalchemy":
             return DuckDBSQLAlchemyClient(config)
+        elif conn_type == "duckdb_direct":
+            # duckdb_direct is an alias for duckdb_sqlalchemy (single database path)
+            return DuckDBSQLAlchemyClient(config)
         elif conn_type == "postgresql":
             return PostgreSQLClient(config)
         elif conn_type == "api":

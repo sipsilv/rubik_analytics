@@ -730,10 +730,6 @@ async def toggle_connection(
     conn.is_enabled = not conn.is_enabled
     db.commit()
     
-    # WebSocket workers removed - announcements feature removed
-            manager.stop_worker(id)
-            logger.info(f"Stopped WebSocket worker for TrueData connection {id}")
-    
     status = "enabled" if conn.is_enabled else "disabled"
     log_audit_event(
         db, current_user.id, f"{status.upper()}_CONNECTION", "connections", str(id)
