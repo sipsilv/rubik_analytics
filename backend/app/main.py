@@ -7,7 +7,7 @@ import sys
 
 # Configure logging to suppress ONLY WebSocket access logs
 # Keep all other normal logs (HTTP requests, application logs, etc.)
-from app.api.v1 import auth, users, admin, connections, websocket, symbols, screener, announcements
+from app.api.v1 import auth, users, admin, connections, websocket, symbols, screener
 from app.core.config import settings
 from app.core.database import get_connection_manager, get_db_router
 
@@ -163,26 +163,6 @@ async def startup_event():
         except Exception as e:
             print(f"  Screener DB       : ERROR - {str(e)}")
         
-        # Test Corporate Announcements database with record count
-        announcements_count = 0
-        try:
-            data_dir = os.path.abspath(settings.DATA_DIR)
-            db_dir = os.path.join(data_dir, "Company Fundamentals")
-            db_path = os.path.join(db_dir, "corporate_announcements.duckdb")
-            if os.path.exists(db_path):
-                test_conn = duckdb.connect(db_path)
-                try:
-                    result = test_conn.execute("SELECT COUNT(*) FROM corporate_announcements").fetchone()
-                    announcements_count = result[0] if result else 0
-                except:
-                    pass
-                test_conn.close()
-                print(f"  Announcements DB  : CONNECTED ({announcements_count} records) - DuckDB")
-            else:
-                print(f"  Announcements DB  : NOT INITIALIZED")
-        except Exception as e:
-            print(f"  Announcements DB  : ERROR - {str(e)}")
-        
         # Test Symbols database with table and symbol count
         symbols_table_count = 0
         symbols_record_count = 0
@@ -333,154 +313,6 @@ async def startup_event():
         except Exception as e:
             pass  # Silent - already logged in database status section
         
-        # Initialize Corporate Announcements Database
-        try:
-            import duckdb
-            import os
-            data_dir = os.path.abspath(settings.DATA_DIR)
-            db_dir = os.path.join(data_dir, "Company Fundamentals")
-            os.makedirs(db_dir, exist_ok=True)
-            db_path = os.path.join(db_dir, "corporate_announcements.duckdb")
-            
-            # Create database and table if it doesn't exist
-            conn = duckdb.connect(db_path)
-            
-            # Check if old schema exists (with 'id' column)
-            old_schema_exists = False
-            try:
-                result = conn.execute("PRAGMA table_info(corporate_announcements)").fetchall()
-                columns = [col[1] for col in result]
-                if 'id' in columns and 'announcement_id' not in columns:
-                    old_schema_exists = True
-            except:
-                pass
-            
-            # Migrate from old schema if needed
-            if old_schema_exists:
-                print("[INFO] Migrating corporate_announcements table to new schema...")
-                try:
-                    # Create new table with correct schema
-                    conn.execute("""
-                        CREATE TABLE IF NOT EXISTS corporate_announcements_new (
-                            announcement_id VARCHAR PRIMARY KEY,
-                            symbol VARCHAR,
-                            exchange VARCHAR,
-                            headline VARCHAR,
-                            description TEXT,
-                            category VARCHAR,
-                            announcement_datetime TIMESTAMP,
-                            received_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                            attachment_id VARCHAR,
-                            symbol_nse VARCHAR,
-                            symbol_bse VARCHAR,
-                            raw_payload TEXT
-                        )
-                    """)
-                    
-                    # Migrate data from old schema
-                    conn.execute("""
-                        INSERT INTO corporate_announcements_new (
-                            announcement_id, symbol, exchange, headline, description, category,
-                            announcement_datetime, received_at, attachment_id, symbol_nse, symbol_bse, raw_payload
-                        )
-                        SELECT 
-                            COALESCE(id, '') as announcement_id,
-                            COALESCE(symbol_nse, symbol_bse) as symbol,
-                            CASE 
-                                WHEN symbol_nse IS NOT NULL THEN 'NSE'
-                                WHEN symbol_bse IS NOT NULL THEN 'BSE'
-                                ELSE NULL
-                            END as exchange,
-                            headline,
-                            COALESCE(news_body, news_sub) as description,
-                            descriptor as category,
-                            CAST(tradedate AS TIMESTAMP) as announcement_datetime,
-                            received_at,
-                            NULL as attachment_id,
-                            symbol_nse,
-                            symbol_bse,
-                            raw_payload
-                        FROM corporate_announcements
-                        WHERE id IS NOT NULL
-                    """)
-                    
-                    # Drop old table and rename new one
-                    conn.execute("DROP TABLE corporate_announcements")
-                    conn.execute("ALTER TABLE corporate_announcements_new RENAME TO corporate_announcements")
-                    conn.commit()
-                    print("[OK] Migration completed successfully")
-                except Exception as e:
-                    print(f"[WARNING] Migration error: {e}, keeping old schema")
-                    conn.rollback()
-            
-            # Create corporate_announcements table with new schema
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS corporate_announcements (
-                    announcement_id VARCHAR PRIMARY KEY,
-                    symbol VARCHAR,
-                    exchange VARCHAR,
-                    headline VARCHAR,
-                    description TEXT,
-                    category VARCHAR,
-                    announcement_datetime TIMESTAMP,
-                    received_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                    attachment_id VARCHAR,
-                    symbol_nse VARCHAR,
-                    symbol_bse VARCHAR,
-                    raw_payload TEXT
-                )
-            """)
-            
-            # Create indexes for efficient queries
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_announcements_datetime 
-                ON corporate_announcements(announcement_datetime DESC)
-            """)
-            
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_announcements_received_at 
-                ON corporate_announcements(received_at DESC)
-            """)
-            
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_announcements_symbol 
-                ON corporate_announcements(symbol)
-            """)
-            
-            conn.commit()
-            conn.close()
-            
-            # Initialize announcements service
-            from app.services.announcements_service import get_announcements_service
-            service = get_announcements_service()
-            print("[OK] Corporate Announcements service initialized")
-            
-            # Start WebSocket workers for enabled TrueData connections
-            try:
-                from app.core.database import get_db
-                from app.models.connection import Connection
-                db_gen = get_db()
-                db = next(db_gen)
-                try:
-                    enabled_truedata_conns = db.query(Connection).filter(
-                        Connection.provider == "TrueData",
-                        Connection.is_enabled == True
-                    ).all()
-                    
-                    for conn in enabled_truedata_conns:
-                        try:
-                            service.start_worker(conn.id)
-                            print(f"[OK] Started WebSocket worker for TrueData connection {conn.id} ({conn.name})")
-                        except Exception as e:
-                            print(f"[WARNING] Failed to start WebSocket worker for connection {conn.id}: {e}")
-                finally:
-                    db.close()
-            except Exception as e:
-                print(f"[WARNING] Could not start WebSocket workers: {e}")
-            
-        except Exception as e:
-            print(f"[WARNING] Could not initialize corporate announcements database: {e}")
-        
         # Start Symbol Scheduler Service
         try:
             from app.services.scheduler_service import get_scheduler_service
@@ -583,7 +415,6 @@ app.include_router(connections.router, prefix="/api/v1/admin/connections", tags=
 app.include_router(symbols.router, prefix="/api/v1/admin/symbols", tags=["symbols"])
 app.include_router(screener.router, prefix="/api/v1/admin/screener", tags=["screener"])
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
-app.include_router(announcements.router, prefix="/api/v1", tags=["announcements"])
 
 @app.get("/health")
 async def health_check():

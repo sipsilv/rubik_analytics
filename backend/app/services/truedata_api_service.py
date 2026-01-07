@@ -2,10 +2,9 @@
 TrueData API Service
 Handles all TrueData API calls with correct authentication methods
 
-CRITICAL: TrueData uses THREE different authentication methods:
+CRITICAL: TrueData uses TWO different authentication methods:
 1. TOKEN (Bearer) - for Corporate & Fundamental APIs
 2. QUERY_CREDENTIALS - for Symbol Master API
-3. WEBSOCKET_CREDENTIALS - for Corporate Announcements (WebSocket)
 """
 import logging
 import requests
@@ -17,8 +16,6 @@ import json
 
 logger = logging.getLogger(__name__)
 
-# Track if WebSocket URL has been logged to avoid repeated logs
-_websocket_url_logged = set()
 
 
 class TrueDataAPIService:
@@ -28,11 +25,6 @@ class TrueDataAPIService:
     AUTH_URL = "https://auth.truedata.in/token"
     SYMBOL_API_URL = "https://api.truedata.in/getAllSymbols"
     CORPORATE_API_BASE = "https://corporate.truedata.in/"
-    # WebSocket URL for Corporate Announcements
-    # CRITICAL: Port 9092 is for Corporate Announcements ONLY
-    # Port 8086 is for Market Data WebSocket (NOT for announcements)
-    # Corporate Announcements WebSocket ALWAYS uses port 9092 regardless of environment
-    WEBSOCKET_URL_CORPORATE_ANNOUNCEMENTS = "wss://corp.truedata.in:9092"
     
     def __init__(self, connection_id: int, db_session=None):
         """
@@ -289,71 +281,6 @@ class TrueDataAPIService:
     def get_bse_symbols(self, response_format: str = "json") -> Any:
         """Get BSE symbols (convenience method)"""
         return self.get_all_symbols(segment="bseeq", response_format=response_format)
-    
-    # ============================================================
-    # 3. WEBSOCKET AUTHENTICATION (Corporate Announcements)
-    # ============================================================
-    
-    def get_websocket_url(self) -> str:
-        """
-        Get WebSocket URL for Corporate Announcements with authentication query parameters
-        
-        CRITICAL: This WebSocket is for Corporate Announcements ONLY (port 9092)
-        Port 8086 is for Market Data WebSocket and must NOT be used here.
-        
-        Returns:
-            WebSocket URL with username and password in query params
-            Format: wss://corp.truedata.in:9092?user=<USERNAME>&password=<PASSWORD>
-        
-        Note: This returns the URL only. WebSocket connection must be
-        established by the caller using a WebSocket client library.
-        """
-        global _websocket_url_logged
-        
-        credentials = self._get_credentials()
-        username = credentials.get("username")
-        password = credentials.get("password")
-        
-        if not username or not password:
-            raise ValueError("Username and password required for WebSocket connection")
-        
-        # Get WebSocket host from credentials (default: corp.truedata.in)
-        websocket_host = credentials.get("websocket_host", "corp.truedata.in")
-        
-        # Get WebSocket port from credentials if specified
-        websocket_port = credentials.get("websocket_port")
-        
-        # CRITICAL: Corporate Announcements WebSocket ALWAYS uses port 9092
-        # Port 8086 is for Market Data WebSocket (NOT for announcements)
-        # Override any other port to ensure correct connection
-        if websocket_port and str(websocket_port) != "9092":
-            logger.warning(
-                f"[WEBSOCKET] Port {websocket_port} specified in credentials, but Corporate Announcements "
-                f"WebSocket MUST use port 9092. Overriding to port 9092."
-            )
-            print(
-                f"[WARNING] Port {websocket_port} was specified, but Corporate Announcements requires port 9092. "
-                f"Using port 9092 instead."
-            )
-        
-        # Always use port 9092 for Corporate Announcements (override any other port)
-        ws_base_url = self.WEBSOCKET_URL_CORPORATE_ANNOUNCEMENTS
-        
-        # Unique key for this connection to track if already logged
-        log_key = f"{self.connection_id}_{websocket_host}_9092"
-        should_log = log_key not in _websocket_url_logged
-        
-        # WebSocket URL with credentials in query params
-        ws_url = f"{ws_base_url}?user={username}&password={password}"
-        
-        # Log connection details ONLY ONCE per unique connection (masked password)
-        if should_log:
-            masked_url = ws_url.replace(f"password={password}", "password=***")
-            logger.info(f"[WEBSOCKET] Corporate Announcements WebSocket initialized: {masked_url}")
-            print(f"[WEBSOCKET] Corporate Announcements: CONNECTED - {websocket_host}:{websocket_port or '9092'}")
-            _websocket_url_logged.add(log_key)
-        
-        return ws_url
     
     # ============================================================
     # CONVENIENCE METHODS FOR COMMON CORPORATE APIs
