@@ -95,11 +95,10 @@ services:
     command: >
       --interval ${WATCHTOWER_INTERVAL}
       --cleanup
-      --notifications webhook
-      --notification-url ${SLACK_WEBHOOK_URL}
-      --notification-title "🚀 Rubik Deploy"
+      --notifications slack
     environment:
-      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
+      WATCHTOWER_NOTIFICATIONS_SLACK_HOOK_URL: ${SLACK_WEBHOOK_URL}
+      WATCHTOWER_NOTIFICATIONS_SLACK_IDENTIFIER: "🚀 Rubik Deploy"
     restart: unless-stopped
 
 networks:
