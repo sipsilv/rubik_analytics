@@ -352,7 +352,7 @@ class AnnouncementsDBWriter:
                         continue
                     
                     # Check for duplicate BEFORE processing (more efficient)
-                    # Also check for duplicates based on headline + datetime if announcement_id is not unique enough
+                    # Primary check: exact announcement_id match
                     existing = conn.execute("""
                         SELECT announcement_id FROM corporate_announcements 
                         WHERE announcement_id = ?
@@ -388,8 +388,11 @@ class AnnouncementsDBWriter:
                             logger.debug(f"Could not parse announcement_datetime: {e}")
                             announcement_datetime = None
                     
-                    # Additional check: If headline and datetime match, consider it a duplicate
-                    # This catches cases where announcement_id might be generated differently
+                    # Normalize headline for comparison (trim, lowercase for case-insensitive matching)
+                    normalized_headline = headline.strip().lower() if headline else None
+                    
+                    # Additional duplicate checks with multiple strategies:
+                    # 1. Exact headline + datetime match (case-sensitive for exact match)
                     if headline and announcement_datetime:
                         similar = conn.execute("""
                             SELECT announcement_id FROM corporate_announcements 
@@ -402,6 +405,53 @@ class AnnouncementsDBWriter:
                             duplicates += 1
                             logger.debug(f"Skipping duplicate announcement (same headline+datetime): {announcement_id}")
                             continue
+                    
+                    # 2. Case-insensitive headline + datetime match (catches variations in case)
+                    if normalized_headline and announcement_datetime:
+                        similar = conn.execute("""
+                            SELECT announcement_id FROM corporate_announcements 
+                            WHERE LOWER(TRIM(headline)) = ? 
+                              AND announcement_datetime = ?
+                            LIMIT 1
+                        """, [normalized_headline, announcement_datetime]).fetchone()
+                        
+                        if similar:
+                            duplicates += 1
+                            logger.debug(f"Skipping duplicate announcement (same normalized headline+datetime): {announcement_id}")
+                            continue
+                    
+                    # 3. Case-insensitive headline match (if datetime is missing, use headline only)
+                    # Only check if we have a headline and no datetime match was found
+                    if normalized_headline and not announcement_datetime:
+                        similar = conn.execute("""
+                            SELECT announcement_id FROM corporate_announcements 
+                            WHERE LOWER(TRIM(headline)) = ? 
+                              AND announcement_datetime IS NULL
+                            LIMIT 1
+                        """, [normalized_headline]).fetchone()
+                        
+                        if similar:
+                            duplicates += 1
+                            logger.debug(f"Skipping duplicate announcement (same normalized headline, no datetime): {announcement_id}")
+                            continue
+                    
+                    # 4. Description-based check (if description is substantial and headline is missing/short)
+                    if description and description.strip() and len(description.strip()) > 50:
+                        normalized_description = description.strip().lower()
+                        # Check for similar description (first 100 chars) + datetime
+                        desc_prefix = normalized_description[:100]
+                        if announcement_datetime:
+                            similar = conn.execute("""
+                                SELECT announcement_id FROM corporate_announcements 
+                                WHERE LOWER(SUBSTR(TRIM(description), 1, 100)) = ?
+                                  AND announcement_datetime = ?
+                                LIMIT 1
+                            """, [desc_prefix, announcement_datetime]).fetchone()
+                            
+                            if similar:
+                                duplicates += 1
+                                logger.debug(f"Skipping duplicate announcement (similar description+datetime): {announcement_id}")
+                                continue
                     
                     # Double-check: Also check if we're about to insert a duplicate
                     # This handles race conditions where another thread might have inserted between check and insert
@@ -451,7 +501,8 @@ class AnnouncementsDBWriter:
                         except:
                             pass
                     
-                    # Check for duplicate BEFORE inserting (more efficient)
+                    # Final check for duplicate BEFORE inserting (handles race conditions)
+                    # This is a safety check in case another thread inserted between the earlier check and now
                     existing = conn.execute("""
                         SELECT announcement_id FROM corporate_announcements 
                         WHERE announcement_id = ?
@@ -459,8 +510,22 @@ class AnnouncementsDBWriter:
                     
                     if existing:
                         duplicates += 1
-                        logger.debug(f"Skipping duplicate announcement: {announcement_id}")
+                        logger.debug(f"Skipping duplicate announcement (final check): {announcement_id}")
                         continue  # Skip duplicate
+                    
+                    # Also do a quick normalized headline check if we have one
+                    if normalized_headline and announcement_datetime:
+                        similar = conn.execute("""
+                            SELECT announcement_id FROM corporate_announcements 
+                            WHERE LOWER(TRIM(headline)) = ? 
+                              AND announcement_datetime = ?
+                            LIMIT 1
+                        """, [normalized_headline, announcement_datetime]).fetchone()
+                        
+                        if similar:
+                            duplicates += 1
+                            logger.debug(f"Skipping duplicate announcement (final normalized check): {announcement_id}")
+                            continue
                     
                     # Ensure we have a symbol value (prioritize symbol_nse, then symbol_bse, then symbol)
                     symbol_value = message.get("symbol_nse") or message.get("symbol_bse") or message.get("symbol")
