@@ -1,9 +1,15 @@
+# ---------------- base ----------------
 FROM node:18-bookworm-slim AS base
 
 # ---------------- deps ----------------
 FROM base AS deps
-RUN apk add --no-cache libc6-compat wget
 WORKDIR /app
+
+# Install system dependencies (Debian uses apt, NOT apk)
+RUN apt-get update && apt-get install -y \
+    wget \
+    libc6 \
+ && rm -rf /var/lib/apt/lists/*
 
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
