@@ -2,15 +2,13 @@
 setlocal enabledelayedexpansion
 
 echo ========================================
-echo Rubik Analytics - Stop Docker Server
+echo Rubik Analytics - Stop Docker
 echo ========================================
 echo.
 
 cd /d "%~dp0"
 
-:: -----------------------------------------------------------------------------
-:: 1. Detect Docker Compose Command
-:: -----------------------------------------------------------------------------
+:: Check Docker Compose
 set DOCKER_CMD=
 docker compose version >nul 2>&1
 if !errorlevel! equ 0 (
@@ -20,24 +18,22 @@ if !errorlevel! equ 0 (
     if !errorlevel! equ 0 (
         set DOCKER_CMD=docker-compose
     ) else (
-        echo [ERROR] Neither 'docker compose' nor 'docker-compose' found!
-        echo Cannot stop containers properly via Docker Compose.
+        echo [ERROR] Docker Compose not found!
         pause
         exit /b 1
     )
 )
 
-echo [INFO] Stopping Docker containers using '%DOCKER_CMD%'...
+echo [INFO] Stopping containers...
 %DOCKER_CMD% down
 
-if %errorlevel% neq 0 (
+if %errorlevel% equ 0 (
     echo.
-    echo [ERROR] Failed to stop containers.
-    pause
-    exit /b 1
+    echo [SUCCESS] Containers stopped.
+) else (
+    echo.
+    echo [WARNING] Some containers may not have stopped.
 )
 
-echo.
-echo [SUCCESS] Docker environment stopped.
 echo.
 pause

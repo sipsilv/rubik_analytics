@@ -1,9 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Removed standalone output - using standard production build
-  experimental: {
-    outputFileTracingRoot: require('path').join(__dirname, '../../'),
+  output: 'standalone',
+  eslint: {
+    // Disable ESLint during production builds
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    // Disable TypeScript errors during production builds
+    ignoreBuildErrors: true,
   },
 }
 

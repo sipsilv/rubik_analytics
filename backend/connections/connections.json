@@ -6,7 +6,7 @@
       "type": "sqlite",
       "category": "auth",
       "config": {
-        "path": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\auth\\sqlite\\auth.db"
+        "path": "/app/data/auth/sqlite/auth.db"
       },
       "is_default": true,
       "is_active": true,

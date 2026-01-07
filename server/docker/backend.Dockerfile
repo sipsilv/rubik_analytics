@@ -5,24 +5,17 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first (for better Docker layer caching)
-# Note: .dockerignore is automatically read from build context root (project root)
+# Copy and install Python dependencies
 COPY backend/requirements.txt ./requirements.txt
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Install dos2unix to fix Windows CRLF issues
-RUN apt-get update && apt-get install -y dos2unix && rm -rf /var/lib/apt/lists/*
-
 
 # Copy application code
 COPY backend/ ./backend/
 
-# Create data directory structure (will be overwritten by volume mount if provided)
-# Note: connections folder is now in backend/, not data/
+# Create data directory structure
 RUN mkdir -p /app/data/auth/sqlite \
     && mkdir -p /app/data/auth/postgres/migrations \
     && mkdir -p /app/data/analytics/duckdb \
@@ -34,30 +27,20 @@ RUN mkdir -p /app/data/auth/sqlite \
     && mkdir -p /app/data/logs/db_logs \
     && mkdir -p /app/data/logs/jobs \
     && mkdir -p /app/data/temp \
-    && mkdir -p /app/data/backups
+    && mkdir -p /app/data/backups \
+    && chmod -R 755 /app/data
 
-# Set proper permissions
-RUN chmod -R 755 /app/data
+# Fix line endings for Python files
+RUN find ./backend -type f -name "*.py" -exec dos2unix {} +
 
-# Expose port
+# Copy entrypoint script
+COPY server/docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh && dos2unix /app/entrypoint.sh
+
 EXPOSE 8000
 
-# Health check with longer start period for database initialization
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run initialization and start server
-WORKDIR /app/backend
-
-# Fix line endings for all scripts and app files
-RUN find . -type f -name "*.py" -exec dos2unix {} +
-
-# Copy and setup entrypoint script for dev/prod mode switching
-# Place it outside /app/backend to avoid being overwritten by bind mounts in dev mode
-COPY server/docker/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh && \
-    dos2unix /app/entrypoint.sh
-
-# Use entrypoint script
 WORKDIR /app/backend
 CMD ["/app/entrypoint.sh"]
