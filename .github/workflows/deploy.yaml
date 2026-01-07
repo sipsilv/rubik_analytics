@@ -18,6 +18,16 @@ jobs:
       packages: write
 
     steps:
+      # 🚀 BUILD STARTED NOTIFICATION
+      - name: Slack Notify Build Started
+        run: |
+          curl -X POST -H "Content-type: application/json" \
+          --data '{
+            "text": "🚀 *Rubik Build Started*\n• Branch: `${{ github.ref_name }}`\n• Commit: `${{ github.sha }}`\n• By: `${{ github.actor }}`"
+          }' \
+          ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      
       - name: Checkout code
         uses: actions/checkout@v4
 
