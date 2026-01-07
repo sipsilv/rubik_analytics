@@ -651,6 +651,25 @@ async def update_connection(
     db.commit()
     db.refresh(conn)
     
+    # Restart WebSocket worker if TrueData connection credentials were updated
+    if is_truedata and update_data.details and (update_data.details.get("username") or update_data.details.get("password")):
+        try:
+            from app.services.announcements_manager import get_announcements_manager
+            manager = get_announcements_manager()
+            # Stop existing worker if running (no error if not found)
+            manager.stop_worker(id)
+            # Start new worker with updated credentials if connection is enabled
+            if conn.is_enabled:
+                success = manager.start_worker(id)
+                if success:
+                    logger.info(f"Restarted WebSocket worker for TrueData connection {id} after credential update")
+                else:
+                    logger.error(f"Failed to start WebSocket worker for TrueData connection {id} after credential update")
+            else:
+                logger.info(f"Connection {id} is disabled, not starting WebSocket worker")
+        except Exception as e:
+            logger.error(f"Could not restart WebSocket worker after credential update: {e}", exc_info=True)
+    
     log_audit_event(
         db, 
         current_user.id, 
@@ -728,6 +747,23 @@ async def toggle_connection(
         
     conn.is_enabled = not conn.is_enabled
     db.commit()
+    
+    # Control WebSocket worker for TrueData connections
+    if conn.provider == "TrueData":
+        from app.services.announcements_manager import get_announcements_manager
+        manager = get_announcements_manager()
+        
+        if conn.is_enabled:
+            # Start WebSocket worker
+            success = manager.start_worker(id)
+            if success:
+                logger.info(f"Started WebSocket worker for TrueData connection {id}")
+            else:
+                logger.error(f"Failed to start WebSocket worker for TrueData connection {id}")
+        else:
+            # Stop WebSocket worker
+            manager.stop_worker(id)
+            logger.info(f"Stopped WebSocket worker for TrueData connection {id}")
     
     status = "enabled" if conn.is_enabled else "disabled"
     log_audit_event(

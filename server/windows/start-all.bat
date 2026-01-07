@@ -136,11 +136,47 @@ if not exist "venv\Scripts\python.exe" (
     exit /b 1
 )
 
+REM Stop any running Docker containers to free ports/locks
+echo [INFO] Ensuring Docker containers are stopped...
+docker compose -f "%~dp0\..\docker\docker-compose.yml" down >nul 2>&1
+if %errorlevel% neq 0 (
+    docker-compose -f "%~dp0\..\docker\docker-compose.yml" down >nul 2>&1
+)
+echo [OK] Docker environment clear
+
+REM Get absolute paths (handle spaces in paths)
 REM Get absolute paths (handle spaces in paths)
 cd /d "%~dp0\..\.."
-set "PROJECT_ROOT=%CD%"
-set "BACKEND_DIR=%PROJECT_ROOT%\backend"
-set "FRONTEND_DIR=%PROJECT_ROOT%\frontend"
+set "PROJECT_ROOT_RAW=%CD%"
+REM Normalize to forward slashes for consistency with Python/SQLAlchemy/Docker config references
+set "PROJECT_ROOT=%PROJECT_ROOT_RAW:\=/%"
+
+set "BACKEND_DIR=%PROJECT_ROOT_RAW%\backend"
+set "FRONTEND_DIR=%PROJECT_ROOT_RAW%\frontend"
+
+REM -----------------------------------------------------------------------------
+REM Environment Variables (Matched with server/docker/docker-compose.yml)
+REM -----------------------------------------------------------------------------
+REM Use forward slashes for all path-based env vars
+set "DATA_DIR=%PROJECT_ROOT%/data"
+set "DATABASE_URL=sqlite:///%PROJECT_ROOT%/data/auth/sqlite/auth.db"
+set "DUCKDB_PATH=%PROJECT_ROOT%/data/analytics/duckdb"
+
+REM JWT Configuration
+set "JWT_SECRET_KEY=your-secret-key-change-in-production"
+set "JWT_SYSTEM_SECRET_KEY=your-system-secret-key-change-in-production"
+set "JWT_ALGORITHM=HS256"
+set "ACCESS_TOKEN_EXPIRE_MINUTES=480"
+set "IDLE_TIMEOUT_MINUTES=30"
+
+REM Security
+set "ENCRYPTION_KEY=jT7ACJPNHdp-IwKWVDto-vohgPGxwP_95sjBlgsr9Eg="
+set "CORS_ORIGINS=http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000,http://rubik-frontend:3000"
+
+REM TrueData
+set "TRUEDATA_DEFAULT_AUTH_URL=https://auth.truedata.in/token"
+set "TRUEDATA_DEFAULT_WEBSOCKET_PORT=8086"
+REM -----------------------------------------------------------------------------
 
 REM Start backend server directly
 REM Note: WebSocket connection logs are filtered in main.py, but HTTP access logs are kept

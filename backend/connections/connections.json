@@ -1,0 +1,63 @@
+{
+  "connections": [
+    {
+      "id": "auth_sqlite_default",
+      "name": "Default SQLite Auth",
+      "type": "sqlite",
+      "category": "auth",
+      "config": {
+        "path": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\auth\\sqlite\\auth.db"
+      },
+      "is_default": true,
+      "is_active": true,
+      "status": "active",
+      "last_tested": null,
+      "created_at": null
+    },
+    {
+      "id": "analytics_duckdb_default",
+      "name": "Default DuckDB Analytics",
+      "type": "duckdb",
+      "category": "analytics",
+      "config": {
+        "ohlcv": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\analytics\\duckdb\\ohlcv.duckdb",
+        "indicators": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\analytics\\duckdb\\indicators.duckdb",
+        "signals": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\analytics\\duckdb\\signals.duckdb",
+        "jobs": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\analytics\\duckdb\\jobs.duckdb"
+      },
+      "is_default": true,
+      "is_active": true,
+      "status": "active",
+      "last_tested": null,
+      "created_at": null
+    },
+    {
+      "id": "symbols_duckdb_default",
+      "name": "Default DuckDB Symbols",
+      "type": "duckdb_direct",
+      "category": "symbols",
+      "config": {
+        "path": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\symbols\\symbols.duckdb"
+      },
+      "is_default": true,
+      "is_active": true,
+      "status": "active",
+      "last_tested": null,
+      "created_at": "2025-12-16T19:05:23.443636"
+    },
+    {
+      "id": "reference_data_duckdb_default",
+      "name": "Default DuckDB Reference Data Symbols",
+      "type": "duckdb_sqlalchemy",
+      "category": "reference_data",
+      "config": {
+        "path": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\analytics\\duckdb\\reference_symbols.duckdb"
+      },
+      "is_default": true,
+      "is_active": true,
+      "status": "active",
+      "last_tested": null,
+      "created_at": "2025-12-21T18:47:59.792445"
+    }
+  ]
+}

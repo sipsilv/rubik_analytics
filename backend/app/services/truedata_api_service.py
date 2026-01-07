@@ -49,8 +49,9 @@ class TrueDataAPIService:
     
     def _get_credentials(self) -> Dict[str, str]:
         """Get and decrypt connection credentials"""
-        if self._credentials:
-            return self._credentials
+        # Don't cache credentials - always fetch fresh from DB
+        # This ensures we get updated credentials after reconfiguration
+        self._credentials = None
         
         # Use provided session or create temporary one
         should_close = False
@@ -70,12 +71,25 @@ class TrueDataAPIService:
             if not conn or not conn.credentials:
                 raise ValueError("Connection not found or credentials not configured")
             
-            decrypted_json = decrypt_data(conn.credentials)
-            self._credentials = json.loads(decrypted_json)
-            return self._credentials
+            try:
+                decrypted_json = decrypt_data(conn.credentials)
+                credentials = json.loads(decrypted_json)
+                # Store in cache for this instance
+                self._credentials = credentials
+                return credentials
+            except Exception as decrypt_error:
+                error_msg = str(decrypt_error)
+                if "InvalidToken" in error_msg or "InvalidSignature" in error_msg or "decrypt" in error_msg.lower():
+                    raise ValueError(
+                        f"Cannot decrypt credentials for connection {self.connection_id}. "
+                        f"The encryption key may have changed. Please reconfigure the connection."
+                    )
+                raise ValueError(f"Error decrypting credentials: {error_msg}")
+        except ValueError:
+            raise  # Re-raise ValueError as-is
         except Exception as e:
             logger.error(f"Error getting credentials for connection {self.connection_id}: {e}")
-            raise
+            raise ValueError(f"Error getting credentials: {str(e)}")
         finally:
             if should_close and self.db_session:
                 self.db_session.close()
@@ -309,27 +323,25 @@ class TrueDataAPIService:
         # Get WebSocket port from credentials if specified
         websocket_port = credentials.get("websocket_port")
         
-        # Unique key for this connection to track if already logged
-        log_key = f"{self.connection_id}_{websocket_host}_{websocket_port or '9092'}"
-        should_log = log_key not in _websocket_url_logged
-        
         # CRITICAL: Corporate Announcements WebSocket ALWAYS uses port 9092
         # Port 8086 is for Market Data WebSocket (NOT for announcements)
-        if websocket_port:
-            if str(websocket_port) != "9092" and should_log:
-                logger.warning(
-                    f"[WEBSOCKET TYPE] Port {websocket_port} specified in credentials. "
-                    f"Corporate Announcements WebSocket should use port 9092. "
-                    f"Port 8086 is for Market Data WebSocket only."
-                )
-                print(
-                    f"[WARNING] Port {websocket_port} specified. "
-                    f"Corporate Announcements should use port 9092 (8086 is for Market Data)"
-                )
-            ws_base_url = f"wss://{websocket_host}:{websocket_port}"
-        else:
-            # Always use port 9092 for Corporate Announcements (regardless of environment)
-            ws_base_url = self.WEBSOCKET_URL_CORPORATE_ANNOUNCEMENTS
+        # Override any other port to ensure correct connection
+        if websocket_port and str(websocket_port) != "9092":
+            logger.warning(
+                f"[WEBSOCKET] Port {websocket_port} specified in credentials, but Corporate Announcements "
+                f"WebSocket MUST use port 9092. Overriding to port 9092."
+            )
+            print(
+                f"[WARNING] Port {websocket_port} was specified, but Corporate Announcements requires port 9092. "
+                f"Using port 9092 instead."
+            )
+        
+        # Always use port 9092 for Corporate Announcements (override any other port)
+        ws_base_url = self.WEBSOCKET_URL_CORPORATE_ANNOUNCEMENTS
+        
+        # Unique key for this connection to track if already logged
+        log_key = f"{self.connection_id}_{websocket_host}_9092"
+        should_log = log_key not in _websocket_url_logged
         
         # WebSocket URL with credentials in query params
         ws_url = f"{ws_base_url}?user={username}&password={password}"

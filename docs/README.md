@@ -12,8 +12,8 @@
    ```
 
 2. **Default login:**
-   - Username: `admin`
-   - Password: `admin123`
+   - Username: ``
+   - Password: ``
 
 3. **Access:**
    - Frontend: http://localhost:3000

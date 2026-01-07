@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y dos2unix && rm -rf /var/lib/apt/lists/*
 COPY backend/ ./backend/
 
 # Create data directory structure (will be overwritten by volume mount if provided)
+# Note: connections folder is now in backend/, not data/
 RUN mkdir -p /app/data/auth/sqlite \
     && mkdir -p /app/data/auth/postgres/migrations \
     && mkdir -p /app/data/analytics/duckdb \
@@ -34,7 +35,6 @@ RUN mkdir -p /app/data/auth/sqlite \
     && mkdir -p /app/data/Company\ Fundamentals \
     && mkdir -p /app/data/symbols \
     && mkdir -p /app/data/connection/truedata \
-    && mkdir -p /app/data/connections \
     && mkdir -p /app/data/logs/app \
     && mkdir -p /app/data/logs/db_logs \
     && mkdir -p /app/data/logs/jobs \

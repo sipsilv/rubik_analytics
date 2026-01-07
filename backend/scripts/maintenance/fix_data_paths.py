@@ -67,7 +67,9 @@ def fix_config_file():
 
 def fix_connections_json():
     """Update connections.json to use relative paths from root data folder"""
-    connections_file = root_data / "connections" / "connections.json"
+    # Connections folder is now in backend/, not data/
+    backend_dir = project_root / "backend"
+    connections_file = backend_dir / "connections" / "connections.json"
     
     if not connections_file.exists():
         print(f"\n[2] Creating connections.json in root data folder...")

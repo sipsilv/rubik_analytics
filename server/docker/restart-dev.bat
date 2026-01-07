@@ -36,11 +36,18 @@ if !errorlevel! equ 0 (
     echo.
     echo [SUCCESS] Dev containers restarted.
     echo.
+    echo [INFO] Waiting for services to start...
+    timeout /t 5 /nobreak >nul
+    echo.
+    echo [INFO] Container status:
+    %DOCKER_CMD% -f docker-compose.dev.yml ps
+    echo.
     echo Backend:  http://localhost:8000
     echo Frontend: http://localhost:3000
 ) else (
     echo.
     echo [ERROR] Failed to restart containers.
+    echo Check the error messages above for details.
 )
 
 echo.

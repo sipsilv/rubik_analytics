@@ -1,0 +1,9 @@
+{
+  "auth": "auth_sqlite_default",
+  "analytics": "analytics_duckdb_default",
+  "ai_llm": null,
+  "broker": null,
+  "social_media": null,
+  "symbols": "symbols_duckdb_default",
+  "reference_data": "reference_data_duckdb_default"
+}

@@ -36,8 +36,8 @@ if not exist "..\data\auth" mkdir "..\data\auth"
 if not exist "..\data\auth\sqlite" mkdir "..\data\auth\sqlite"
 if not exist "..\data\analytics" mkdir "..\data\analytics"
 if not exist "..\data\analytics\duckdb" mkdir "..\data\analytics\duckdb"
-if not exist "..\data\connections" mkdir "..\data\connections"
 if not exist "..\data\logs" mkdir "..\data\logs"
+if not exist "connections" mkdir "connections"
 
 echo.
 echo [INFO] Initializing database...

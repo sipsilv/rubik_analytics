@@ -766,10 +766,22 @@ export const analyticsAPI = {
 
 // Announcements API
 export const announcementsAPI = {
-  getAnnouncements: async (limit: number = 100, offset: number = 0) => {
-    const response = await api.get('/announcements', {
-      params: { limit, offset }
-    })
+  getAnnouncements: async (limit: number = 100, offset: number = 0, search?: string) => {
+    const params: any = { limit, offset }
+    if (search) {
+      params.search = search
+    }
+    const response = await api.get('/announcements', { params })
     return response.data
+  },
+  getStatus: async () => {
+    const response = await api.get('/announcements/status')
+    return response.data
+  },
+  downloadAttachment: async (announcementId: string) => {
+    const response = await api.get(`/announcements/${announcementId}/attachment`, {
+      responseType: 'blob'
+    })
+    return response // Return full response to access headers
   },
 }

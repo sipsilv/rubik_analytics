@@ -24,8 +24,12 @@ class ConnectionManager:
         # Validate that abspath didn't result in empty string (shouldn't happen, but safety check)
         if not self.data_dir or not self.data_dir.strip():
             raise ValueError(f"ConnectionManager data_dir resolved to empty path. Original: '{data_dir}'")
-        self.connections_file = os.path.join(self.data_dir, "connections", "connections.json")
-        self.active_file = os.path.join(self.data_dir, "connections", "active_connection.json")
+        # Connections folder is now in backend directory, not data directory
+        # Get backend directory: backend/app/core/database/connection_manager.py -> backend/
+        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        connections_dir = os.path.join(backend_dir, "connections")
+        self.connections_file = os.path.join(connections_dir, "connections.json")
+        self.active_file = os.path.join(connections_dir, "active_connection.json")
         self.clients: Dict[str, DatabaseClient] = {}
         self.active_connections: Dict[str, str] = {}
         self.connections: Dict[str, Dict[str, Any]] = {}
@@ -192,6 +196,30 @@ class ConnectionManager:
             if os.path.exists(path_str):
                 return path_str
             
+            # Docker -> Windows Fix
+            # If we are on Windows and the path starts with /app/ or looks like a unix path
+            if (sys.platform == "win32") and (path_str.startswith("/app/") or path_str.startswith("/")):
+                 # Try to rebase relative to data_dir
+                parts = path_str.strip("/").split("/")
+                
+                # Markers to identify where the relative path starts
+                markers = ["auth", "analytics", "Company Fundamentals", "symbols", "connections", "logs"]
+                
+                for marker in markers:
+                    if marker in parts:
+                        try:
+                            idx = parts.index(marker)
+                            # Reconstruct path from marker onwards relative to our data_dir
+                            rel_path = os.path.join(*parts[idx:])
+                            new_path = os.path.join(self.data_dir, rel_path)
+                            # Verify if this corrected path exists (optional, but good for confirmation)
+                            if os.path.exists(new_path) or os.path.exists(os.path.dirname(new_path)):
+                                print(f"[INFO] Path correction (Docker->Win): '{path_str}' -> '{new_path}'")
+                                return new_path
+                        except Exception as e:
+                            print(f"[WARNING] Path correction failed for '{path_str}': {e}")
+
+            # Windows -> Docker Fix (existing logic)
             # If we are in Docker (implied by /app/data existing or path starting with /app)
             # and the path looks like a Windows path (drive letter or backslashes)
             if (sys.platform != "win32") and (":" in path_str or "\\" in path_str):
@@ -209,7 +237,7 @@ class ConnectionManager:
                             # Reconstruct path from marker onwards relative to our data_dir
                             rel_path = os.path.join(*parts[idx:])
                             new_path = os.path.join(self.data_dir, rel_path)
-                            print(f"[INFO] Path correction: '{path_str}' -> '{new_path}'")
+                            print(f"[INFO] Path correction (Win->Docker): '{path_str}' -> '{new_path}'")
                             return new_path
                         except Exception as e:
                             print(f"[WARNING] Path correction failed for '{path_str}': {e}")
