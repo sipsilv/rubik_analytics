@@ -9,10 +9,31 @@ This directory contains Docker configuration files for running Rubik Analytics i
 
 ## Quick Start
 
-1. **Create a `.env` file** (optional, for custom configuration):
+1. **Configure data folder path** (IMPORTANT for transferring Docker):
+   - **Default**: Uses relative path `../../data` from `docker-compose.yml` location
+   - **When transferring**: Set `HOST_DATA_DIR` environment variable to absolute path
+   
+   **Option A: Using .env file (Recommended)**
    ```bash
    cp .env.example .env
-   # Edit .env with your settings
+   # Edit .env and set HOST_DATA_DIR=/absolute/path/to/data
+   ```
+
+   **Option B: Using environment variable**
+   ```bash
+   # Linux/Mac
+   export HOST_DATA_DIR=/home/user/rubik-analytics/data
+   
+   # Windows PowerShell
+   $env:HOST_DATA_DIR="C:/Users/username/rubik-analytics/data"
+   
+   # Windows CMD
+   set HOST_DATA_DIR=C:/Users/username/rubik-analytics/data
+   ```
+
+   **Option C: Inline with docker-compose**
+   ```bash
+   HOST_DATA_DIR=/absolute/path/to/data docker-compose up -d --build
    ```
 
 2. **Build and start all services**:
@@ -82,7 +103,9 @@ docker-compose exec backend python scripts/init/init_auth_database.py \
 
 ## Data Persistence
 
-All data is stored in the `../../data` directory, which is mounted as a volume. This includes:
+All data is stored in a directory mounted as a volume. By default, this is the `../../data` directory relative to `docker-compose.yml`, but you can configure it using the `HOST_DATA_DIR` environment variable.
+
+The mounted data directory includes:
 - Authentication database (`auth/sqlite/auth.db`)
 - Analytics databases (`analytics/duckdb/`)
 - Corporate announcements (`Company Fundamentals/corporate_announcements.duckdb`)
@@ -90,7 +113,11 @@ All data is stored in the `../../data` directory, which is mounted as a volume. 
 - Logs (`logs/`)
 - Connection configurations (`connection/`)
 
-**Important**: The data directory is mounted from the host, so data persists across container restarts.
+**Important**: 
+- The data directory is mounted from the host, so data persists across container restarts.
+- **When transferring Docker to another machine**, set `HOST_DATA_DIR` to an absolute path pointing to your data folder location.
+- The data folder path inside the container is always `/app/data` (don't change this).
+- The host path (where your actual data is) can be configured via `HOST_DATA_DIR`.
 
 ## Services
 
@@ -111,6 +138,57 @@ Services communicate via the `rubik-network` bridge network:
 - Frontend → Backend: `http://backend:8000`
 - External → Frontend: `http://localhost:3000`
 - External → Backend: `http://localhost:8000`
+
+## Data Folder Configuration
+
+### Default Behavior
+By default, Docker uses a relative path (`../../data`) from the `docker-compose.yml` file location. This works when running from the `server/docker/` directory.
+
+### Transferring Docker to Another Machine
+
+When transferring Docker to another machine or location, you **must** configure the data folder path:
+
+1. **Using .env file (Recommended)**:
+   ```bash
+   cd server/docker
+   cp .env.example .env
+   # Edit .env and set:
+   HOST_DATA_DIR=/absolute/path/to/your/data/folder
+   ```
+
+2. **Using environment variable**:
+   ```bash
+   # Before running docker-compose
+   export HOST_DATA_DIR=/absolute/path/to/data  # Linux/Mac
+   # or
+   $env:HOST_DATA_DIR="C:/path/to/data"  # Windows PowerShell
+   ```
+
+3. **Verify the path is correct**:
+   ```bash
+   # Check if the data folder exists
+   ls "$HOST_DATA_DIR"  # Linux/Mac
+   dir "$env:HOST_DATA_DIR"  # Windows PowerShell
+   ```
+
+### Troubleshooting Data Folder Issues
+
+**Problem**: Docker container can't find the data folder
+**Solution**: 
+- Verify `HOST_DATA_DIR` is set to an absolute path
+- Ensure the path exists and has correct permissions
+- Check docker-compose logs: `docker-compose logs backend`
+
+**Problem**: Permission denied errors
+**Solution**:
+- Ensure the data folder has read/write permissions
+- On Linux/Mac: `chmod -R 755 /path/to/data`
+- On Windows: Ensure Docker Desktop has access to the drive/folder
+
+**Problem**: Data not persisting after container restart
+**Solution**:
+- Verify the volume mount in `docker-compose ps` shows correct path
+- Check that `HOST_DATA_DIR` points to the correct location
 
 ## Troubleshooting
 
