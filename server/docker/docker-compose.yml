@@ -1,10 +1,9 @@
 version: '3.8'
 
 # Data folder configuration
-# By default, uses relative path from docker-compose.yml location (../../data)
-# To override, set HOST_DATA_DIR environment variable to an absolute path
-# Example: HOST_DATA_DIR=/absolute/path/to/data docker-compose up
-# Or set in .env file: HOST_DATA_DIR=/absolute/path/to/data
+# The data folder path is automatically detected by docker-start.sh/docker-start.bat scripts
+# They set HOST_DATA_DIR to the absolute path of the project's data/ folder
+# To manually override, set HOST_DATA_DIR environment variable or in .env file
 
 services:
   backend:
@@ -18,12 +17,12 @@ services:
       - DATA_DIR=/app/data
       - DATABASE_URL=sqlite:////app/data/auth/sqlite/auth.db
       - DUCKDB_PATH=/app/data/analytics/duckdb
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
-      - JWT_SYSTEM_SECRET_KEY=${JWT_SYSTEM_SECRET_KEY:-your-system-secret-key-change-in-production}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_SYSTEM_SECRET_KEY=${JWT_SYSTEM_SECRET_KEY}
       - JWT_ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=480
       - IDLE_TIMEOUT_MINUTES=30
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-jT7ACJPNHdp-IwKWVDto-vohgPGxwP_95sjBlgsr9Eg=}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000,http://rubik-frontend:3000}
       - TRUEDATA_DEFAULT_AUTH_URL=${TRUEDATA_DEFAULT_AUTH_URL:-https://auth.truedata.in/token}
       - TRUEDATA_DEFAULT_WEBSOCKET_PORT=${TRUEDATA_DEFAULT_WEBSOCKET_PORT:-8086}
@@ -33,7 +32,8 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
     volumes:
-      # Use HOST_DATA_DIR if provided, otherwise use relative path from docker-compose.yml
+      # HOST_DATA_DIR is automatically set by docker-start scripts
+      # Falls back to relative path if not set (for manual docker-compose usage)
       - ${HOST_DATA_DIR:-../../data}:/app/data
     restart: unless-stopped
     networks:

@@ -9,36 +9,40 @@ This directory contains Docker configuration files for running Rubik Analytics i
 
 ## Quick Start
 
-1. **Configure data folder path** (IMPORTANT for transferring Docker):
-   - **Default**: Uses relative path `../../data` from `docker-compose.yml` location
-   - **When transferring**: Set `HOST_DATA_DIR` environment variable to absolute path
-   
-   **Option A: Using .env file (Recommended)**
+### Automatic Setup (Recommended)
+
+The Docker setup **automatically detects** the data folder path - no manual configuration needed!
+
+1. **Configure environment variables** (REQUIRED):
    ```bash
+   # Copy the example environment file
    cp .env.example .env
-   # Edit .env and set HOST_DATA_DIR=/absolute/path/to/data
+   
+   # Edit .env and set REQUIRED security keys (no default passwords allowed):
+   # - JWT_SECRET_KEY (generate: openssl rand -base64 32)
+   # - JWT_SYSTEM_SECRET_KEY (generate: openssl rand -base64 32)
+   # - ENCRYPTION_KEY (generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
    ```
 
-   **Option B: Using environment variable**
+2. **Start services** using the start scripts (automatic data folder detection):
    ```bash
    # Linux/Mac
-   export HOST_DATA_DIR=/home/user/rubik-analytics/data
+   ./docker-start.sh
    
-   # Windows PowerShell
-   $env:HOST_DATA_DIR="C:/Users/username/rubik-analytics/data"
-   
-   # Windows CMD
-   set HOST_DATA_DIR=C:/Users/username/rubik-analytics/data
+   # Windows
+   docker-start.bat
    ```
+   
+   The start scripts will:
+   - ✅ Automatically detect the `data/` folder from the project root
+   - ✅ Create the directory structure if it doesn't exist
+   - ✅ Verify security keys are set (prevents startup with default passwords)
+   - ✅ Start all services with proper configuration
 
-   **Option C: Inline with docker-compose**
+3. **Alternative: Manual start** (not recommended - requires manual path configuration):
    ```bash
+   # Only if you need to override the automatic detection
    HOST_DATA_DIR=/absolute/path/to/data docker-compose up -d --build
-   ```
-
-2. **Build and start all services**:
-   ```bash
-   docker-compose up -d --build
    ```
 
 3. **View logs**:
@@ -55,23 +59,24 @@ This directory contains Docker configuration files for running Rubik Analytics i
 
 ### Backend Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATA_DIR` | `/app/data` | Directory for all data files (databases, logs, etc.) |
-| `DATABASE_URL` | `sqlite:////app/data/auth/sqlite/auth.db` | SQLite database URL for authentication |
-| `DUCKDB_PATH` | `./data/analytics/duckdb` | Path for DuckDB analytics databases |
-| `JWT_SECRET_KEY` | `your-secret-key-change-in-production` | **CHANGE IN PRODUCTION** - Secret key for JWT tokens |
-| `JWT_SYSTEM_SECRET_KEY` | `your-system-secret-key-change-in-production` | **CHANGE IN PRODUCTION** - System secret key |
-| `JWT_ALGORITHM` | `HS256` | JWT algorithm |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `480` | Access token expiration (8 hours) |
-| `IDLE_TIMEOUT_MINUTES` | `30` | Idle session timeout |
-| `ENCRYPTION_KEY` | `jT7ACJPNHdp-IwKWVDto-vohgPGxwP_95sjBlgsr9Eg=` | **CHANGE IN PRODUCTION** - Fernet encryption key |
-| `CORS_ORIGINS` | `http://localhost:3000,...` | Comma-separated list of allowed CORS origins |
-| `TRUEDATA_DEFAULT_AUTH_URL` | `https://auth.truedata.in/token` | TrueData authentication URL |
-| `TRUEDATA_DEFAULT_WEBSOCKET_PORT` | `8086` | TrueData WebSocket port |
-| `ADMIN_USERNAME` | (empty) | Admin username for initial setup (optional) |
-| `ADMIN_EMAIL` | (empty) | Admin email for initial setup (optional) |
-| `ADMIN_PASSWORD` | (empty) | Admin password for initial setup (optional) |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATA_DIR` | Auto | Directory for all data files (databases, logs, etc.) - set to `/app/data` in container |
+| `DATABASE_URL` | Auto | SQLite database URL for authentication - auto-configured |
+| `DUCKDB_PATH` | Auto | Path for DuckDB analytics databases - auto-configured |
+| `JWT_SECRET_KEY` | **YES** | Secret key for JWT tokens - **MUST BE SET** (generate: `openssl rand -base64 32`) |
+| `JWT_SYSTEM_SECRET_KEY` | **YES** | System secret key - **MUST BE SET** (generate: `openssl rand -base64 32`) |
+| `JWT_ALGORITHM` | No | JWT algorithm (default: `HS256`) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | No | Access token expiration (default: `480` = 8 hours) |
+| `IDLE_TIMEOUT_MINUTES` | No | Idle session timeout (default: `30`) |
+| `ENCRYPTION_KEY` | **YES** | Fernet encryption key - **MUST BE SET** (generate: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`) |
+| `CORS_ORIGINS` | No | Comma-separated list of allowed CORS origins (default: `http://localhost:3000,...`) |
+| `TRUEDATA_DEFAULT_AUTH_URL` | No | TrueData authentication URL (default: `https://auth.truedata.in/token`) |
+| `TRUEDATA_DEFAULT_WEBSOCKET_PORT` | No | TrueData WebSocket port (default: `8086`) |
+| `HOST_DATA_DIR` | No | Host path to data folder - **automatically detected** (override if needed) |
+| `ADMIN_USERNAME` | No | Admin username for initial setup (optional) |
+| `ADMIN_EMAIL` | No | Admin email for initial setup (optional) |
+| `ADMIN_PASSWORD` | No | Admin password for initial setup (optional) |
 
 ### Frontend Environment Variables
 
@@ -101,9 +106,53 @@ docker-compose exec backend python scripts/init/init_auth_database.py \
   --password SecurePassword123!
 ```
 
-## Data Persistence
+## Data Persistence & Automatic Folder Detection
 
-All data is stored in a directory mounted as a volume. By default, this is the `../../data` directory relative to `docker-compose.yml`, but you can configure it using the `HOST_DATA_DIR` environment variable.
+### 🎯 Automatic Data Folder Detection (Default Behavior)
+
+**The data folder is automatically detected and configured - no manual setup required!**
+
+When you use `docker-start.sh` or `docker-start.bat`, the scripts automatically:
+
+1. **Detect project root**: Finds the project root directory (parent of `server/docker/`)
+2. **Locate data folder**: Locates the `data/` folder relative to the project root
+3. **Convert to absolute path**: Converts the path to an absolute path for Docker volume mounting
+4. **Create structure**: Creates the complete directory structure if it doesn't exist:
+   - `data/auth/sqlite/`
+   - `data/analytics/duckdb/`
+   - `data/Company Fundamentals/`
+   - `data/symbols/`
+   - `data/connection/truedata/`
+   - `data/logs/app/`, `data/logs/db_logs/`, `data/logs/jobs/`
+   - `data/temp/`
+   - `data/backups/`
+
+**Example Output:**
+```
+[INFO] Automatically detected data folder: /home/user/rubik-analytics/data
+```
+
+**Benefits:**
+- ✅ Works when transferring Docker to another machine (maintains project structure)
+- ✅ No manual path configuration needed
+- ✅ Consistent behavior across different operating systems
+- ✅ Automatically creates missing directories
+
+**Just run:**
+```bash
+./docker-start.sh      # Linux/Mac
+docker-start.bat       # Windows
+```
+
+### Manual Override (Optional)
+
+If you need to use a custom data folder location, set `HOST_DATA_DIR` in your `.env` file:
+```bash
+# .env
+HOST_DATA_DIR=/custom/path/to/data
+```
+
+### Data Directory Contents
 
 The mounted data directory includes:
 - Authentication database (`auth/sqlite/auth.db`)
@@ -113,11 +162,12 @@ The mounted data directory includes:
 - Logs (`logs/`)
 - Connection configurations (`connection/`)
 
-**Important**: 
+**Important Notes:**
 - The data directory is mounted from the host, so data persists across container restarts.
-- **When transferring Docker to another machine**, set `HOST_DATA_DIR` to an absolute path pointing to your data folder location.
-- The data folder path inside the container is always `/app/data` (don't change this).
-- The host path (where your actual data is) can be configured via `HOST_DATA_DIR`.
+- The data folder path **inside the container** is always `/app/data` (don't change this).
+- The data folder path **on the host** is automatically detected (or can be set via `HOST_DATA_DIR`).
+- When transferring Docker to another machine, **the automatic detection will work** as long as the project structure is maintained (`data/` folder is in the project root).
+- The start scripts ensure the data folder exists and has proper permissions.
 
 ## Services
 
@@ -139,45 +189,68 @@ Services communicate via the `rubik-network` bridge network:
 - External → Frontend: `http://localhost:3000`
 - External → Backend: `http://localhost:8000`
 
-## Data Folder Configuration
+## Security Configuration
 
-### Default Behavior
-By default, Docker uses a relative path (`../../data`) from the `docker-compose.yml` file location. This works when running from the `server/docker/` directory.
+### Required Environment Variables (NO DEFAULT PASSWORDS)
 
-### Transferring Docker to Another Machine
+**⚠️ IMPORTANT: Default passwords are NOT allowed and will be rejected!**
 
-When transferring Docker to another machine or location, you **must** configure the data folder path:
+Before starting Docker, you **MUST** set these security keys in your `.env` file. **All three keys are required and must be unique, secure values.**
 
-1. **Using .env file (Recommended)**:
+1. **JWT_SECRET_KEY** - Used for signing JWT tokens
    ```bash
-   cd server/docker
-   cp .env.example .env
-   # Edit .env and set:
-   HOST_DATA_DIR=/absolute/path/to/your/data/folder
+   # Generate a secure key:
+   openssl rand -base64 32
+   
+   # Then add to .env:
+   JWT_SECRET_KEY=<your-generated-key>
    ```
 
-2. **Using environment variable**:
+2. **JWT_SYSTEM_SECRET_KEY** - Used for system-level JWT operations
    ```bash
-   # Before running docker-compose
-   export HOST_DATA_DIR=/absolute/path/to/data  # Linux/Mac
-   # or
-   $env:HOST_DATA_DIR="C:/path/to/data"  # Windows PowerShell
+   # Generate a secure key:
+   openssl rand -base64 32
+   
+   # Then add to .env:
+   JWT_SYSTEM_SECRET_KEY=<your-generated-key>
    ```
 
-3. **Verify the path is correct**:
+3. **ENCRYPTION_KEY** - Used to encrypt connection credentials (Fernet key)
    ```bash
-   # Check if the data folder exists
-   ls "$HOST_DATA_DIR"  # Linux/Mac
-   dir "$env:HOST_DATA_DIR"  # Windows PowerShell
+   # Generate a secure key:
+   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+   
+   # Then add to .env:
+   ENCRYPTION_KEY=<your-generated-key>
    ```
+
+**Automatic Security Checks:**
+- ✅ The `docker-start.sh` and `docker-start.bat` scripts **automatically verify** that all required keys are set
+- ✅ **Prevents startup** if keys are missing, empty, or using default/example values
+- ✅ Provides clear error messages if security configuration is invalid
+- ✅ No default passwords are allowed - you must generate your own secure keys
+
+**Example of what happens if keys are missing:**
+```
+[ERROR] JWT_SECRET_KEY is not set or is using default value!
+[ERROR] Please edit .env file and set a secure JWT_SECRET_KEY
+```
 
 ### Troubleshooting Data Folder Issues
 
 **Problem**: Docker container can't find the data folder
 **Solution**: 
-- Verify `HOST_DATA_DIR` is set to an absolute path
-- Ensure the path exists and has correct permissions
+- ✅ **Use the start scripts**: `docker-start.sh` (Linux/Mac) or `docker-start.bat` (Windows) - they automatically detect the data folder
+- ⚠️ If using manual `docker-compose up`, you must set `HOST_DATA_DIR` to an absolute path
+- Check the start script output for the detected path: `[INFO] Automatically detected data folder: ...`
+- Verify the data folder exists: The scripts will create it if missing
 - Check docker-compose logs: `docker-compose logs backend`
+
+**Problem**: "HOST_DATA_DIR is not set" error
+**Solution**:
+- Use `docker-start.sh` or `docker-start.bat` instead of manual `docker-compose` commands
+- The start scripts automatically set `HOST_DATA_DIR` based on the project structure
+- If you must use manual `docker-compose`, set: `export HOST_DATA_DIR=/absolute/path/to/data` (Linux/Mac) or `$env:HOST_DATA_DIR="C:/path/to/data"` (Windows)
 
 **Problem**: Permission denied errors
 **Solution**:
@@ -188,7 +261,7 @@ When transferring Docker to another machine or location, you **must** configure 
 **Problem**: Data not persisting after container restart
 **Solution**:
 - Verify the volume mount in `docker-compose ps` shows correct path
-- Check that `HOST_DATA_DIR` points to the correct location
+- The automatic detection should handle this - check the start script output for the detected path
 
 ## Troubleshooting
 
@@ -235,8 +308,8 @@ docker-compose exec backend python scripts/init/init_auth_database.py
 
 ## Production Considerations
 
-1. **Change default secrets**: Update `JWT_SECRET_KEY`, `JWT_SYSTEM_SECRET_KEY`, and `ENCRYPTION_KEY` in production
-2. **Use environment variables**: Store secrets in `.env` file (not committed to git)
+1. **Set security keys**: **REQUIRED** - Set `JWT_SECRET_KEY`, `JWT_SYSTEM_SECRET_KEY`, and `ENCRYPTION_KEY` in `.env` file (not committed to git)
+2. **Use environment variables**: Store all secrets in `.env` file (git-ignored)
 3. **Enable HTTPS**: Use a reverse proxy (nginx, traefik) for HTTPS
 4. **Resource limits**: Already configured in docker-compose.yml:
    - Backend: 2 CPU / 2GB RAM limit, 0.5 CPU / 512MB reserved
@@ -245,6 +318,7 @@ docker-compose exec backend python scripts/init/init_auth_database.py
 5. **Log rotation**: Configured with 10MB max size and 3 file rotation
 6. **Backup strategy**: Regularly backup the `data/` directory
 7. **Monitoring**: Set up monitoring for health checks and resource usage
+8. **Data folder**: Automatically detected - no manual configuration needed when using start scripts
 
 ## Windows Server Compatibility
 
