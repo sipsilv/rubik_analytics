@@ -1,17 +1,25 @@
-FROM node:20-alpine AS base
+FROM node:18-bookworm-slim AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat wget
 WORKDIR /app
 
-# Copy package files first for better layer caching
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci --prefer-offline --no-audit
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
+
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY frontend/ ./frontend/
+WORKDIR /app/frontend
 
 # Copy node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules

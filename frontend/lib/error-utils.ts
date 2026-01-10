@@ -122,8 +122,7 @@ export function getErrorMessage(error: any, fallback: string = 'An error occurre
   // NO HTTP RESPONSE - Backend is truly unreachable
   // Check for network errors (no response from server)
   if (isNetworkError(error)) {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-    return `Unable to connect to server. Please ensure the backend is running at ${apiUrl}. Check the troubleshooting guide for help.`
+    return `Unable to connect to server. Please ensure the backend is running. Check the troubleshooting guide for help.`
   }
 
   // Try error.message as fallback

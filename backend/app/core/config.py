@@ -31,13 +31,24 @@ class Settings(BaseSettings):
     
     @property
     def cors_origins_list(self) -> List[str]:
+        if not self.CORS_ORIGINS:
+            return ["http://localhost:3000"]
         """Convert CORS_ORIGINS to list format"""
         if isinstance(self.CORS_ORIGINS, list):
-            return self.CORS_ORIGINS
-        elif isinstance(self.CORS_ORIGINS, str):
+            origins =  self.CORS_ORIGINS
+        else:
+            origins = [
+                    origin.strip()
+                    for origin in self.CORS_ORIGINS.split(",")
+                    if origin.strip()
+                    ]
+        if "*" in origins:
+            raise ValueError(
+                "CORS_ORIGINS cannot contain '*' when allow_credentials=True. "
+                "Use explicit origins like http://localhost:3000"
+            )
             # Split by comma and strip whitespace
-            return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
-        return ["http://localhost:3000"]
+        return origins
     
     class Config:
         env_file = ".env"

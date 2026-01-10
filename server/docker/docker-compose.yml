@@ -22,8 +22,15 @@ services:
       - JWT_ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=480
       - IDLE_TIMEOUT_MINUTES=30
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000,http://rubik-frontend:3000}
+      # Security
+      # Fernet encryption key (32 bytes, base64url-encoded)
+      # Generate new key: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-jT7ACJPNHdp-IwKWVDto-vohgPGxwP_95sjBlgsr9Eg=}
+      # CORS - allow frontend container and localhost
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000,http://rubik-frontend:3000, https://rubikanalytics.net, https://www.rubikanalytics.net}
+      # TrueData Connection Defaults (configurable via environment variables)
+      # These defaults are used when creating new TrueData connections if URL/port are not specified
+      # Can be overridden by setting environment variables or editing connection in UI
       - TRUEDATA_DEFAULT_AUTH_URL=${TRUEDATA_DEFAULT_AUTH_URL:-https://auth.truedata.in/token}
       - TRUEDATA_DEFAULT_WEBSOCKET_PORT=${TRUEDATA_DEFAULT_WEBSOCKET_PORT:-8086}
       - TZ=${TZ:-Asia/Kolkata}
@@ -62,11 +69,15 @@ services:
     build:
       context: ../..
       dockerfile: server/docker/frontend.Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=https://api.rubikanalytics.net
+
     container_name: rubik-frontend
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:8000}
+      # API URL - use backend container name for inter-container communication
+      # For browser requests, this should be the external URL
       - NODE_ENV=production
       - TZ=${TZ:-Asia/Kolkata}
     depends_on:
