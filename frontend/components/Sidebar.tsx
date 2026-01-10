@@ -232,13 +232,13 @@ export function Sidebar() {
               <SidebarTooltip key={item.href} text={item.name} collapsed={collapsed}>
                 <Link
                   href={item.href}
-                    className={`group flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ease-in-out min-h-[38px] active:scale-[0.98] focus:outline-none w-full ${active
+                    className={`group relative flex items-center ${collapsed ? 'justify-center' : 'justify-start'} px-3 py-2 rounded-lg transition-all duration-200 ease-in-out min-h-[38px] active:scale-[0.98] focus:outline-none w-full ${active
                       ? 'bg-[#f1f5f9] dark:bg-[#182447] text-text-primary font-semibold'
                       : 'text-text-secondary hover:bg-[#f3f4f6] dark:hover:bg-[#182447]/60 hover:text-text-primary'
                   }`}
                 >
-                  {/* Icon - Always rendered, fixed size and position with border-only styling */}
-                  <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center relative">
+                  {/* Icon - Always rendered, fixed size and position */}
+                  <div className={`flex-shrink-0 w-5 h-5 flex items-center justify-center ${collapsed ? '' : 'mr-3'}`}>
                       <IconComponent className={`w-5 h-5 transition-all duration-300 ease-in-out ${active 
                         ? 'scale-110' 
                         : 'group-hover:scale-110'
@@ -257,11 +257,11 @@ export function Sidebar() {
                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                       }} />
                   </div>
-                  {/* Text - Opacity and width transition only */}
-                    <span className={`text-[14.5px] font-sans leading-[1.5] whitespace-nowrap transition-all duration-300 ease-in-out ${active ? 'font-semibold' : 'font-medium'
+                  {/* Text - Absolutely positioned to prevent layout shift, opacity transition only */}
+                    <span className={`absolute left-[44px] top-1/2 -translate-y-1/2 text-[14.5px] font-sans leading-[1.5] whitespace-nowrap transition-all duration-300 ease-in-out ${active ? 'font-semibold' : 'font-medium'
                       } ${collapsed
-                      ? 'opacity-0 w-0 overflow-hidden' 
-                      : 'opacity-100 w-auto'
+                      ? 'opacity-0 pointer-events-none' 
+                      : 'opacity-100'
                   }`}>
                     {item.name}
                   </span>
@@ -300,13 +300,13 @@ export function Sidebar() {
                     <SidebarTooltip key={item.href} text={item.name} collapsed={collapsed}>
                       <Link
                         href={item.href}
-                          className={`group flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ease-in-out min-h-[38px] active:scale-[0.98] focus:outline-none w-full ${active
+                          className={`group relative flex items-center ${collapsed ? 'justify-center' : 'justify-start'} px-3 py-2 rounded-lg transition-all duration-200 ease-in-out min-h-[38px] active:scale-[0.98] focus:outline-none w-full ${active
                             ? 'bg-[#f1f5f9] dark:bg-[#182447] text-text-primary font-semibold'
                             : 'text-text-secondary hover:bg-[#f3f4f6] dark:hover:bg-[#182447]/60 hover:text-text-primary'
                         }`}
                       >
                         {/* Icon - Always rendered, fixed size and position with border-only styling */}
-                        <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center relative">
+                        <div className={`flex-shrink-0 w-5 h-5 flex items-center justify-center ${collapsed ? '' : 'mr-3'}`}>
                             <IconComponent className={`w-5 h-5 transition-all duration-300 ease-in-out ${active 
                               ? 'scale-110' 
                               : 'group-hover:scale-110'
@@ -325,11 +325,11 @@ export function Sidebar() {
                               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                             }} />
                         </div>
-                        {/* Text - Opacity and width transition only */}
-                          <span className={`text-[14.5px] font-sans leading-[1.5] whitespace-nowrap transition-all duration-300 ease-in-out ${active ? 'font-semibold' : 'font-medium'
+                        {/* Text - Absolutely positioned to prevent layout shift, opacity transition only */}
+                          <span className={`absolute left-[44px] top-1/2 -translate-y-1/2 text-[14.5px] font-sans leading-[1.5] whitespace-nowrap transition-all duration-300 ease-in-out ${active ? 'font-semibold' : 'font-medium'
                             } ${collapsed
-                            ? 'opacity-0 w-0 overflow-hidden' 
-                            : 'opacity-100 w-auto'
+                            ? 'opacity-0 pointer-events-none' 
+                            : 'opacity-100'
                         }`}>
                           {item.name}
                         </span>
@@ -351,16 +351,16 @@ export function Sidebar() {
         <SidebarTooltip text="Logout" collapsed={collapsed}>
           <button
             onClick={handleLogout}
-            className="group w-full flex items-center gap-3 px-3 py-2 rounded-lg text-text-secondary hover:bg-[#f3f4f6] dark:hover:bg-[#182447]/60 hover:text-error transition-all duration-200 min-h-[38px] active:scale-[0.98] focus:outline-none"
+            className={`group relative w-full flex items-center ${collapsed ? 'justify-center' : 'justify-start'} px-3 py-2 rounded-lg text-text-secondary hover:bg-[#f3f4f6] dark:hover:bg-[#182447]/60 hover:text-error transition-all duration-200 min-h-[38px] active:scale-[0.98] focus:outline-none`}
           >
             {/* Icon - Always rendered, fixed size and position */}
-            <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+            <div className={`flex-shrink-0 w-5 h-5 flex items-center justify-center ${collapsed ? '' : 'mr-3'}`}>
               <LogOut className="w-5 h-5 text-text-secondary group-hover:text-error transition-colors duration-150" />
             </div>
-            {/* Text - Opacity and width transition only */}
-              <span className={`text-[14.5px] font-sans font-medium leading-[1.5] whitespace-nowrap transition-all duration-300 ease-in-out ${collapsed
-                ? 'opacity-0 w-0 overflow-hidden' 
-                : 'opacity-100 w-auto'
+            {/* Text - Absolutely positioned to prevent layout shift, opacity transition only */}
+              <span className={`absolute left-[44px] top-1/2 -translate-y-1/2 text-[14.5px] font-sans font-medium leading-[1.5] whitespace-nowrap transition-all duration-300 ease-in-out ${collapsed
+                ? 'opacity-0 pointer-events-none' 
+                : 'opacity-100'
             }`}>
               Logout
             </span>
