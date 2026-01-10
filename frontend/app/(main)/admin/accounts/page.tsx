@@ -555,8 +555,8 @@ export default function AccountsPage() {
           setSelectedUser(null)
         }}
         user={selectedUser}
-        onUpdate={() => {
-          loadUsers()
+        onUpdate={async () => {
+          await loadUsers()
         }}
       />
 

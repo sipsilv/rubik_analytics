@@ -8,20 +8,47 @@ import { userAPI } from '@/lib/api'
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setUser = useAuthStore((state) => state.setUser)
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const user = useAuthStore((state) => state.user)
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Initialize auth state from cookies on mount (works across tabs)
   useEffect(() => {
-    const userStr = Cookies.get('user')
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr)
-        setUser(user)
-      } catch (e) {
-        Cookies.remove('user')
-        Cookies.remove('auth_token')
+    const syncAuthFromCookies = () => {
+      const userStr = Cookies.get('user')
+      const token = Cookies.get('auth_token')
+      
+      if (userStr && token) {
+        try {
+          const userFromCookie = JSON.parse(userStr)
+          // Only update if user changed or not authenticated
+          if (!isAuthenticated || JSON.stringify(user) !== JSON.stringify(userFromCookie)) {
+            setUser(userFromCookie)
+          }
+        } catch (e) {
+          Cookies.remove('user')
+          Cookies.remove('auth_token')
+          setUser(null)
+        }
+      } else if (isAuthenticated) {
+        // Cookies cleared but state still authenticated - clear state
+        setUser(null)
       }
     }
-  }, [setUser])
+
+    // Sync on mount
+    syncAuthFromCookies()
+
+    // Also sync when window gains focus (in case cookies were updated in another tab)
+    const handleFocus = () => {
+      syncAuthFromCookies()
+    }
+    
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [setUser, isAuthenticated, user])
 
   // Heartbeat mechanism: ping server every 2 minutes to keep user status LIVE
   useEffect(() => {

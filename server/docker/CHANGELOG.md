@@ -1,5 +1,24 @@
 # Docker Configuration Updates
 
+## Latest Update (End-to-End Improvements - Windows Server Parity)
+Comprehensive updates to Docker configuration for production readiness, performance optimization, and exact Windows server compatibility.
+
+### Improvements Made
+- ✅ Added Docker Compose version specification (3.8)
+- ✅ Added resource limits and reservations for both services (CPU and memory)
+- ✅ Enhanced logging configuration with rotation (max-size: 10m, max-file: 3)
+- ✅ Improved health check start periods (backend: 40s, frontend: 60s)
+- ✅ Optimized Dockerfile layer caching for faster rebuilds
+- ✅ Added pip upgrade step in backend Dockerfile
+- ✅ Improved npm install with `--prefer-offline --no-audit` flags
+- ✅ Better error handling for dos2unix commands
+- ✅ Moved timezone setup earlier in backend Dockerfile for better caching
+- ✅ **Fixed DUCKDB_PATH to use absolute path** (`/app/data/analytics/duckdb`) to match Windows server
+- ✅ **Verified all environment variables match Windows server configuration exactly**
+- ✅ **Entrypoint script verified to match Windows server uvicorn command pattern**
+
+## Previous Updates
+
 ## Summary
 Updated Docker configuration to match Windows server setup end-to-end, ensuring all services, dependencies, and configurations are properly configured.
 

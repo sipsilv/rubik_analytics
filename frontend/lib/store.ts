@@ -26,6 +26,8 @@ interface AuthState {
   logout: () => void
 }
 
+const AUTH_STORAGE_KEY = 'rubik_auth_sync'
+
 export const useAuthStore = create<AuthState>((set, get) => {
   // Initialize from cookies if available
   let initialUser: User | null = null
@@ -44,6 +46,47 @@ export const useAuthStore = create<AuthState>((set, get) => {
       Cookies.remove('user')
       Cookies.remove('auth_token')
     }
+
+    // Listen for storage events from other tabs to sync auth state
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === AUTH_STORAGE_KEY && e.newValue !== null) {
+        try {
+          const authData = JSON.parse(e.newValue)
+          const { user, isAuthenticated } = authData
+          
+          // Only update if the state actually changed
+          const currentState = get()
+          if (currentState.isAuthenticated !== isAuthenticated || 
+              JSON.stringify(currentState.user) !== JSON.stringify(user)) {
+            set({ user, isAuthenticated })
+            
+            // Sync cookies if needed (should already be in sync, but ensure consistency)
+            if (isAuthenticated && user) {
+              Cookies.set('user', JSON.stringify(user), { 
+                expires: 1, 
+                sameSite: 'lax',
+                secure: window.location.protocol === 'https:'
+              })
+            } else {
+              Cookies.remove('user')
+              Cookies.remove('auth_token')
+            }
+          }
+        } catch (error) {
+          console.error('Error syncing auth state from storage:', error)
+        }
+      } else if (e.key === AUTH_STORAGE_KEY && e.newValue === null) {
+        // Auth was cleared in another tab
+        const currentState = get()
+        if (currentState.isAuthenticated) {
+          Cookies.remove('auth_token')
+          Cookies.remove('user')
+          set({ user: null, isAuthenticated: false })
+        }
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
   }
   
   return {
@@ -57,16 +100,44 @@ export const useAuthStore = create<AuthState>((set, get) => {
           secure: typeof window !== 'undefined' && window.location.protocol === 'https:'
         })
         set({ user, isAuthenticated: true })
+        
+        // Sync to localStorage to notify other tabs
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ 
+              user, 
+              isAuthenticated: true 
+            }))
+          } catch (error) {
+            console.error('Error syncing auth state to localStorage:', error)
+          }
+        }
       } else {
         Cookies.remove('user')
         set({ user: null, isAuthenticated: false })
+        
+        // Sync to localStorage to notify other tabs
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.removeItem(AUTH_STORAGE_KEY)
+          } catch (error) {
+            console.error('Error clearing auth state from localStorage:', error)
+          }
+        }
       }
     },
     logout: () => {
       Cookies.remove('auth_token')
       Cookies.remove('user')
       set({ user: null, isAuthenticated: false })
+      
+      // Sync to localStorage to notify other tabs
       if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem(AUTH_STORAGE_KEY)
+        } catch (error) {
+          console.error('Error clearing auth state from localStorage:', error)
+        }
         window.location.href = '/login'
       }
     },

@@ -698,6 +698,7 @@ export const announcementsAPI = {
     from_date?: string
     to_date?: string
     symbol?: string
+    search?: string
     limit?: number
     offset?: number
     page?: number
@@ -743,7 +744,8 @@ export const announcementsAPI = {
   // Returns blob directly (axios with responseType: 'blob' returns blob in response.data)
   getAttachment: async (id: string) => {
     const response = await api.get(`/announcements/${id}/attachment`, {
-      responseType: 'blob'
+      responseType: 'blob',
+      timeout: 60000 // 60 seconds timeout (backend has retry logic, so this is total time)
     })
     return response.data // axios returns blob in data when responseType is 'blob'
   },

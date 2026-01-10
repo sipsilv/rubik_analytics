@@ -363,12 +363,13 @@ class TrueDataAPIService:
         params = {"symbol": symbol, **kwargs}
         return self.call_corporate_api("getCorporateInfo", params=params)
     
-    def get_announcement_attachment(self, announcement_id: str) -> requests.Response:
+    def get_announcement_attachment(self, announcement_id: str, max_retries: int = 3) -> requests.Response:
         """
-        Get announcement attachment file from TrueData
+        Get announcement attachment file from TrueData with retry logic
         
         Args:
             announcement_id: Announcement ID
+            max_retries: Maximum number of retry attempts for transient failures
             
         Returns:
             requests.Response object with binary file content
@@ -376,7 +377,13 @@ class TrueDataAPIService:
         Note:
             This endpoint returns binary data (PDF/document), not JSON
             Endpoint: GET /announcementfile?id=<announcement_id>
+            
+        Raises:
+            requests.exceptions.RequestException: For network/connection errors
+            requests.exceptions.HTTPError: For HTTP errors (404, 500, etc.)
         """
+        import time
+        
         token = self._get_token()
         url = f"{self.CORPORATE_API_BASE}announcementfile"
         
@@ -387,68 +394,134 @@ class TrueDataAPIService:
         
         params = {"id": announcement_id}
         
-        try:
-            response = requests.get(
-                url,
-                headers=headers,
-                params=params,
-                timeout=60,  # Longer timeout for file downloads
-                stream=True  # Stream response for large files
-            )
-            
-            response.raise_for_status()
-            
-            # Return the response object directly (contains binary data)
-            return response
-            
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 401:
-                # Token expired, try to refresh
-                logger.warning(f"Token expired for connection {self.connection_id}, attempting refresh")
-                credentials = self._get_credentials()
-                username = credentials.get("username")
-                password = credentials.get("password")
-                auth_url = credentials.get("auth_url", self.AUTH_URL)
+        # Retry logic for transient failures
+        last_exception = None
+        for attempt in range(max_retries):
+            try:
+                # Use shorter timeout for user-facing requests (30 seconds)
+                # But allow longer for retries (60 seconds)
+                timeout = 30 if attempt == 0 else 60
                 
-                if username and password:
-                    self._token_service.generate_token(
-                        connection_id=self.connection_id,
-                        username=username,
-                        password=password,
-                        auth_url=auth_url
-                    )
-                    # Retry with new token
-                    token = self._get_token()
-                    headers["Authorization"] = f"Bearer {token}"
-                    response = requests.get(
-                        url,
-                        headers=headers,
-                        params=params,
-                        timeout=60,
-                        stream=True
-                    )
-                    response.raise_for_status()
-                    return response
-            
-            # Check if TrueData API returns 500 with "File does not exist" - treat as 404
-            # This happens when TrueData API returns 500 instead of 404 for missing files
-            if e.response:
-                error_text = e.response.text if hasattr(e.response, 'text') else str(e.response)
-                error_lower = error_text.lower()
+                response = requests.get(
+                    url,
+                    headers=headers,
+                    params=params,
+                    timeout=timeout,
+                    stream=True  # Stream response for large files
+                )
                 
-                # Check if error indicates file not found (500 with "file does not exist" message)
-                if e.response.status_code == 500 and "file does not exist" in error_lower:
-                    logger.warning(f"Attachment {announcement_id} not found (TrueData returned 500 with 'File does not exist')")
-                    # Re-raise as HTTPError - we'll handle it in the API endpoint
-                    # Set a custom attribute to mark this as a "not found" error
-                    e.is_file_not_found = True
-                    raise e
-            
-            logger.error(f"HTTP error fetching attachment {announcement_id}: {e.response.status_code} - {e.response.text[:200]}")
-            raise
-        except Exception as e:
-            logger.error(f"Error fetching attachment {announcement_id}: {e}")
-            raise
+                response.raise_for_status()
+                
+                # Success - return the response
+                if attempt > 0:
+                    logger.info(f"Successfully fetched attachment {announcement_id} on attempt {attempt + 1}")
+                
+                return response
+                
+            except requests.exceptions.Timeout as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    # Exponential backoff: 1s, 2s, 4s
+                    wait_time = 2 ** attempt
+                    logger.warning(
+                        f"Timeout fetching attachment {announcement_id} (attempt {attempt + 1}/{max_retries}). "
+                        f"Retrying in {wait_time}s..."
+                    )
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"Timeout fetching attachment {announcement_id} after {max_retries} attempts")
+                    raise requests.exceptions.Timeout(
+                        f"Connection timed out after {max_retries} attempts. "
+                        f"The server may be experiencing high load or connectivity issues."
+                    ) from e
+                    
+            except requests.exceptions.ConnectionError as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    # Exponential backoff: 1s, 2s, 4s
+                    wait_time = 2 ** attempt
+                    logger.warning(
+                        f"Connection error fetching attachment {announcement_id} (attempt {attempt + 1}/{max_retries}). "
+                        f"Retrying in {wait_time}s..."
+                    )
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"Connection error fetching attachment {announcement_id} after {max_retries} attempts")
+                    raise requests.exceptions.ConnectionError(
+                        f"Failed to connect to the server after {max_retries} attempts. "
+                        f"Please check your internet connection and service status."
+                    ) from e
+                    
+            except requests.exceptions.HTTPError as e:
+                # Don't retry on HTTP errors (except 401 which we handle separately)
+                if e.response.status_code == 401:
+                    # Token expired, try to refresh and retry once
+                    if attempt == 0:  # Only refresh token on first attempt
+                        logger.warning(f"Token expired for connection {self.connection_id}, attempting refresh")
+                        credentials = self._get_credentials()
+                        username = credentials.get("username")
+                        password = credentials.get("password")
+                        auth_url = credentials.get("auth_url", self.AUTH_URL)
+                        
+                        if username and password:
+                            try:
+                                self._token_service.generate_token(
+                                    connection_id=self.connection_id,
+                                    username=username,
+                                    password=password,
+                                    auth_url=auth_url
+                                )
+                                # Get new token and retry
+                                token = self._get_token()
+                                headers["Authorization"] = f"Bearer {token}"
+                                continue  # Retry the request with new token
+                            except Exception as refresh_error:
+                                logger.error(f"Failed to refresh token: {refresh_error}")
+                                raise requests.exceptions.HTTPError(
+                                    f"Authentication failed: Unable to refresh token. "
+                                    f"Please check your credentials."
+                                ) from refresh_error
+                    
+                # Check if TrueData API returns 500 with "File does not exist" - treat as 404
+                # This happens when TrueData API returns 500 instead of 404 for missing files
+                if e.response:
+                    error_text = e.response.text if hasattr(e.response, 'text') else str(e.response)
+                    error_lower = error_text.lower()
+                    
+                    # Check if error indicates file not found (500 with "file does not exist" message)
+                    if e.response.status_code == 500 and "file does not exist" in error_lower:
+                        logger.warning(f"Attachment {announcement_id} not found (TrueData returned 500 with 'File does not exist')")
+                        # Re-raise as HTTPError - we'll handle it in the API endpoint
+                        # Set a custom attribute to mark this as a "not found" error
+                        e.is_file_not_found = True
+                        raise e
+                
+                # For other HTTP errors, don't retry
+                logger.error(f"HTTP error fetching attachment {announcement_id}: {e.response.status_code} - {e.response.text[:200]}")
+                raise
+                
+            except requests.exceptions.RequestException as e:
+                # Other request exceptions - retry if transient
+                last_exception = e
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    logger.warning(
+                        f"Request error fetching attachment {announcement_id} (attempt {attempt + 1}/{max_retries}). "
+                        f"Retrying in {wait_time}s... Error: {str(e)[:100]}"
+                    )
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"Request error fetching attachment {announcement_id} after {max_retries} attempts: {e}")
+                    raise
+        
+        # If we get here, all retries failed
+        if last_exception:
+            raise last_exception
+        else:
+            raise Exception(f"Failed to fetch attachment {announcement_id} after {max_retries} attempts")
 
 
 def get_truedata_api_service(connection_id: int, db_session=None) -> TrueDataAPIService:

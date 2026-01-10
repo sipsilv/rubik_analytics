@@ -40,8 +40,13 @@ export function SessionWarning({ collapsed }: SessionWarningProps) {
       }
     }
 
-    // NO auto-refresh - check session only on mount
+    // Check immediately on mount
     checkSession()
+
+    // Update timer every second for real-time countdown
+    const interval = setInterval(() => {
+      checkSession()
+    }, 1000)
 
     // Track user activity
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart']
@@ -52,7 +57,7 @@ export function SessionWarning({ collapsed }: SessionWarningProps) {
     })
 
     return () => {
-      // No interval to clear - auto-refresh removed
+      clearInterval(interval)
       events.forEach((event) => {
         document.removeEventListener(event, handleActivity)
       })

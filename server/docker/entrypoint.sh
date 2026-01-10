@@ -27,4 +27,6 @@ fi
 echo "==========================================="
 echo "  STARTING RUBIK ANALYTICS BACKEND"
 echo "==========================================="
+# Match Windows server: use --reload for development, --workers 1 for production
+# --no-access-log matches Windows server behavior (HTTP access logs filtered)
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --no-access-log

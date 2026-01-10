@@ -3,66 +3,56 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import Cookies from 'js-cookie'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL
-if(!API_URL){
-	throw new Error("api url is not found");
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 // Convert HTTP URL to WebSocket URL
 const getWebSocketUrl = (): string => {
   const url = API_URL.replace(/^http/, 'ws')
   const token = Cookies.get('auth_token')
-  // WebSocket endpoint - adjust path as needed
   const wsPath = `${url}/api/v1/ws`
   return token ? `${wsPath}?token=${token}` : wsPath
 }
 
-export interface UserStatusUpdate {
-  user_id: string | number
-  is_online: boolean
-  last_active_at?: string | null
-}
-
-export interface AnnouncementUpdate {
+export interface Announcement {
   id: string
   trade_date?: string
+  script_code?: number
   symbol_nse?: string
   symbol_bse?: string
   company_name?: string
   news_headline?: string
   descriptor_name?: string
   announcement_type?: string
-  [key: string]: any
+  news_subhead?: string
+  news_body?: string
+  descriptor_category?: string
+  date_of_meeting?: string
+  links?: Array<{ title?: string; url: string }>
 }
 
-interface UseWebSocketStatusReturn {
+interface UseAnnouncementsWebSocketReturn {
   isConnected: boolean
   error: Error | null
 }
 
 /**
- * Hook to manage WebSocket connection for real-time user status updates and announcements
- * Falls back gracefully if WebSocket is not available
+ * Hook to manage WebSocket connection for real-time announcement updates
  */
-export function useWebSocketStatus(
-  onStatusUpdate?: (update: UserStatusUpdate) => void,
-  onAnnouncement?: (announcement: AnnouncementUpdate) => void
-): UseWebSocketStatusReturn {
+export function useAnnouncementsWebSocket(
+  onNewAnnouncement?: (announcement: Announcement) => void
+): UseAnnouncementsWebSocketReturn {
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectAttemptsRef = useRef(0)
   const isConnectingRef = useRef(false)
-  const maxReconnectAttempts = 5
+  const maxReconnectAttempts = 10
   const reconnectDelay = 3000 // 3 seconds
   
   // Use ref for callback to avoid dependency issues
-  const onStatusUpdateRef = useRef(onStatusUpdate)
-  onStatusUpdateRef.current = onStatusUpdate
-  
-  const onAnnouncementRef = useRef(onAnnouncement)
-  onAnnouncementRef.current = onAnnouncement
+  const onNewAnnouncementRef = useRef(onNewAnnouncement)
+  onNewAnnouncementRef.current = onNewAnnouncement
 
   const connect = useCallback(() => {
     // Prevent multiple simultaneous connection attempts
@@ -83,46 +73,40 @@ export function useWebSocketStatus(
       const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
-        // WebSocket connection logs suppressed
         isConnectingRef.current = false
         setIsConnected(true)
         setError(null)
         reconnectAttemptsRef.current = 0
+        console.log('[Announcements WebSocket] Connected')
       }
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data)
           
-          // Handle user status updates
-          if (data.type === 'user_status_update' || data.event === 'user_status_update') {
-            const update: UserStatusUpdate = {
-              user_id: data.user_id || data.userId,
-              is_online: data.is_online ?? data.isOnline ?? false,
-              last_active_at: data.last_active_at || data.lastActiveAt || null,
-            }
-            onStatusUpdateRef.current?.(update)
-          }
-          // Handle new announcements
-          else if (data.type === 'announcement' || data.event === 'new_announcement') {
-            const announcement: AnnouncementUpdate = data.data || data
+          // Handle new announcement
+          if (data.type === 'announcement' || data.event === 'new_announcement') {
+            const announcement = data.data || data
             if (announcement && announcement.id) {
-              onAnnouncementRef.current?.(announcement)
+              onNewAnnouncementRef.current?.(announcement)
             }
+          }
+          // Handle connection status
+          else if (data.type === 'connection' || data.type === 'pong') {
+            // Connection alive
           }
         } catch (err) {
-          console.warn('[WebSocket] Failed to parse message:', err)
+          console.warn('[Announcements WebSocket] Failed to parse message:', err)
         }
       }
 
       ws.onerror = (err) => {
-        console.warn('[WebSocket] Error:', err)
+        console.warn('[Announcements WebSocket] Error:', err)
         isConnectingRef.current = false
         setError(new Error('WebSocket connection error'))
       }
 
       ws.onclose = () => {
-        // WebSocket disconnection logs suppressed
         isConnectingRef.current = false
         setIsConnected(false)
         wsRef.current = null
@@ -140,11 +124,11 @@ export function useWebSocketStatus(
 
       wsRef.current = ws
     } catch (err) {
-      console.warn('[WebSocket] Failed to create connection:', err)
+      console.warn('[Announcements WebSocket] Failed to create connection:', err)
       isConnectingRef.current = false
       setError(err instanceof Error ? err : new Error('Failed to create WebSocket'))
     }
-  }, []) // No dependencies - uses refs for mutable values
+  }, [])
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -159,7 +143,7 @@ export function useWebSocketStatus(
     setIsConnected(false)
   }, [])
 
-  // Initial connection effect - runs once on mount
+  // Initial connection effect
   useEffect(() => {
     const token = Cookies.get('auth_token')
     if (token) {
@@ -169,9 +153,9 @@ export function useWebSocketStatus(
     return () => {
       disconnect()
     }
-  }, []) // Empty deps - only run on mount/unmount
+  }, [connect, disconnect])
 
-  // Periodic auth check - separate from connection logic
+  // Periodic auth check
   useEffect(() => {
     const interval = setInterval(() => {
       const token = Cookies.get('auth_token')
@@ -188,10 +172,11 @@ export function useWebSocketStatus(
       // Reconnect if connection is closed/closing and we still have token
       else if (token && wsState !== WebSocket.OPEN && wsState !== WebSocket.CONNECTING && !isConnectingRef.current) {
         if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+          reconnectAttemptsRef.current = 0 // Reset attempts for periodic check
           connect()
         }
       }
-    }, 5000) // Check every 5 seconds instead of 1 second
+    }, 5000) // Check every 5 seconds
     
     return () => clearInterval(interval)
   }, [connect, disconnect])

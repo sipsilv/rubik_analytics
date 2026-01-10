@@ -1,16 +1,52 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Bcrypt configuration - using 12 rounds for better security (default is 10)
+BCRYPT_ROUNDS = 12
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    """
+    Verify a plain password against a bcrypt hash.
+    Handles both new bcrypt hashes and old passlib-style hashes for backward compatibility.
+    """
+    try:
+        # Direct bcrypt verification
+        # If hash is already a bytes object, use it directly; otherwise decode it
+        if isinstance(hashed_password, bytes):
+            hash_bytes = hashed_password
+        else:
+            hash_bytes = hashed_password.encode('utf-8')
+        
+        # Convert plain password to bytes
+        password_bytes = plain_password.encode('utf-8')
+        
+        # Use bcrypt to verify
+        return bcrypt.checkpw(password_bytes, hash_bytes)
+    except Exception as e:
+        print(f"[SECURITY] Password verification error: {e}")
+        return False
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    """
+    Hash a password using bcrypt.
+    Returns the hash as a string for database storage.
+    """
+    try:
+        # Convert password to bytes
+        password_bytes = password.encode('utf-8')
+        
+        # Generate salt and hash the password
+        salt = bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
+        hashed = bcrypt.hashpw(password_bytes, salt)
+        
+        # Return as string for database storage
+        return hashed.decode('utf-8')
+    except Exception as e:
+        print(f"[SECURITY] Password hashing error: {e}")
+        raise
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None, is_system: bool = False) -> str:
     """Create JWT access token for users or system services"""

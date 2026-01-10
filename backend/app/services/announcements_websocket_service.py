@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from app.services.announcements_service import get_announcements_service
 from app.services.truedata_api_service import get_truedata_api_service
 from app.models.connection import Connection
+from app.core.websocket_manager import manager
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -171,6 +172,23 @@ class AnnouncementsWebSocketService:
                 headline = announcement.get('news_headline', '') or ''
                 headline_preview = headline[:50] if headline else 'N/A'
                 logger.info(f"Inserted new announcement: {announcement_id} - {headline_preview}")
+                
+                # Broadcast to all connected frontend clients
+                try:
+                    # Enrich announcement with descriptor metadata if available
+                    enriched_announcement = announcement.copy()
+                    if announcement.get("descriptor_id"):
+                        desc_meta = service.get_descriptor_metadata(announcement["descriptor_id"])
+                        if desc_meta:
+                            enriched_announcement["descriptor_name"] = desc_meta.get("descriptor_name")
+                            enriched_announcement["descriptor_category"] = desc_meta.get("descriptor_category")
+                    
+                    # Broadcast to all connected clients
+                    await manager.broadcast_announcement(enriched_announcement)
+                    logger.debug(f"Broadcast announcement {announcement_id} to connected clients")
+                except Exception as broadcast_error:
+                    logger.warning(f"Failed to broadcast announcement {announcement_id}: {broadcast_error}")
+                    # Don't fail the whole process if broadcast fails
             else:
                 logger.debug(f"Announcement already exists: {announcement_id}")
                 

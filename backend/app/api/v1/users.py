@@ -41,6 +41,10 @@ async def update_current_user(
     from datetime import datetime
     user.last_active_at = datetime.utcnow()
     
+    # Update name if provided
+    if user_update.name is not None:
+        user.name = user_update.name
+    
     if user_update.email is not None:
         # Check if email is already taken (if provided)
         if user_update.email:
@@ -53,6 +57,12 @@ async def update_current_user(
         user.email = user_update.email
     
     if user_update.mobile is not None:
+        # Validate mobile is not empty
+        if not user_update.mobile or not user_update.mobile.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mobile number is required"
+            )
         # Check if mobile is already taken
         existing = db.query(User).filter(User.mobile == user_update.mobile, User.id != user.id).first()
         if existing:
@@ -60,7 +70,7 @@ async def update_current_user(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Mobile number already registered"
             )
-        user.mobile = user_update.mobile
+        user.mobile = user_update.mobile.strip()
     
     if user_update.theme_preference is not None:
         if user_update.theme_preference not in ["dark", "light"]:

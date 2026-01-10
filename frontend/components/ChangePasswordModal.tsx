@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
@@ -20,6 +20,15 @@ export function ChangePasswordModal({ isOpen, onClose, user, onUpdate }: ChangeP
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Reset form when modal opens/closes
+  useEffect(() => {
+    if (!isOpen) {
+      setNewPassword('')
+      setConfirmPassword('')
+      setError('')
+    }
+  }, [isOpen])
 
   if (!isOpen || !user) return null
 
@@ -44,7 +53,8 @@ export function ChangePasswordModal({ isOpen, onClose, user, onUpdate }: ChangeP
       await adminAPI.changeUserPassword(user.id, newPassword)
       setNewPassword('')
       setConfirmPassword('')
-      onUpdate()
+      // Wait for update to complete, then refresh and close
+      await onUpdate()
       onClose()
     } catch (err: any) {
       setError(getErrorMessage(err, 'Failed to change password'))

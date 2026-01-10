@@ -8,6 +8,7 @@ import { adminAPI } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { useAuthStore } from '@/lib/store'
+import { userAPI } from '@/lib/api'
 
 interface EditUserModalProps {
   isOpen: boolean
@@ -17,7 +18,7 @@ interface EditUserModalProps {
 }
 
 export function EditUserModal({ isOpen, onClose, user, onUpdate }: EditUserModalProps) {
-  const { user: currentUser } = useAuthStore()
+  const { user: currentUser, setUser } = useAuthStore()
   const isSuperAdmin = currentUser?.role === 'super_admin'
   const [formData, setFormData] = useState({
     name: '',
@@ -29,29 +30,62 @@ export function EditUserModal({ isOpen, onClose, user, onUpdate }: EditUserModal
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (user) {
+    if (user && isOpen) {
       setFormData({
         name: user.name || '',
         email: user.email || '',
         mobile: user.mobile || '',
         role: user.role || 'user',
       })
+      setError('') // Reset error when modal opens
     }
-  }, [user])
+  }, [user, isOpen])
 
   if (!isOpen || !user) return null
+
+  const validateEmail = (email: string): boolean => {
+    if (!email || email.trim() === '') return true // Email is optional
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email.trim())
+  }
+
+  const validateMobile = (mobile: string): boolean => {
+    if (!mobile || mobile.trim() === '') {
+      return false // Mobile is required
+    }
+    // Basic mobile validation - digits only, at least 10 characters
+    const mobileRegex = /^[0-9]{10,15}$/
+    return mobileRegex.test(mobile.trim().replace(/[\s-]/g, ''))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    
+    // Validation
+    if (formData.email && formData.email.trim() && !validateEmail(formData.email)) {
+      setError('Please enter a valid email address')
+      return
+    }
+
+    if (!formData.mobile || !formData.mobile.trim()) {
+      setError('Mobile number is required')
+      return
+    }
+
+    if (!validateMobile(formData.mobile)) {
+      setError('Please enter a valid mobile number (10-15 digits)')
+      return
+    }
+
     setLoading(true)
 
     try {
       // Only include role if user is super_admin and target user is not super_admin
       const updateData: any = {
-        name: formData.name,
-        email: formData.email || null,
-        mobile: formData.mobile,
+        name: formData.name?.trim() || null,
+        email: formData.email?.trim() || null,
+        mobile: formData.mobile.trim(),
       }
       
       // Only include role if super_admin is editing a non-super_admin user
@@ -59,8 +93,20 @@ export function EditUserModal({ isOpen, onClose, user, onUpdate }: EditUserModal
         updateData.role = formData.role
       }
       
-      await adminAPI.updateUser(user.id, updateData)
-      onUpdate()
+      const updatedUser = await adminAPI.updateUser(user.id, updateData)
+      
+      // If editing the current user, update the auth store
+      if (currentUser && (currentUser.id === user.id || currentUser.user_id === user.user_id)) {
+        try {
+          const refreshedUser = await userAPI.getCurrentUser()
+          setUser(refreshedUser)
+        } catch (err) {
+          console.error('Failed to refresh current user:', err)
+        }
+      }
+      
+      // Wait for update to complete, then refresh and close
+      await onUpdate()
       onClose()
     } catch (err: any) {
       setError(getErrorMessage(err, 'Failed to update user'))

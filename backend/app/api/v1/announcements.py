@@ -67,6 +67,7 @@ async def get_announcements(
     from_date: Optional[str] = Query(None, description="From date (YYYY-MM-DD)"),
     to_date: Optional[str] = Query(None, description="To date (YYYY-MM-DD)"),
     symbol: Optional[str] = Query(None, description="Filter by symbol (NSE or BSE)"),
+    search: Optional[str] = Query(None, description="Search by headline or symbol (flexible match)"),
     limit: Optional[int] = Query(None, description="Maximum number of records (legacy)"),
     offset: int = Query(0, description="Offset for pagination (legacy)"),
     page: Optional[int] = Query(None, description="Page number (1-indexed)"),
@@ -83,6 +84,7 @@ async def get_announcements(
             from_date=from_date,
             to_date=to_date,
             symbol=symbol,
+            search=search,
             limit=limit,
             offset=offset,
             page=page,
@@ -91,13 +93,20 @@ async def get_announcements(
         
         logger.info(f"Retrieved {len(announcements)} announcements from DB, total: {total}")
         
+        # Batch fetch descriptor metadata to avoid N+1 queries
+        descriptor_ids = [ann.get("descriptor_id") for ann in announcements if ann.get("descriptor_id")]
+        descriptor_metadata = {}
+        if descriptor_ids:
+            descriptor_metadata = service.get_descriptor_metadata_batch(descriptor_ids)
+            logger.debug(f"Batch loaded {len(descriptor_metadata)} descriptor metadata entries")
+        
         # Enrich with descriptor metadata
         enriched = []
         for ann in announcements:
             try:
                 enriched_ann = ann.copy()
                 if ann.get("descriptor_id"):
-                    desc_meta = service.get_descriptor_metadata(ann["descriptor_id"])
+                    desc_meta = descriptor_metadata.get(ann["descriptor_id"])
                     if desc_meta:
                         enriched_ann["descriptor_name"] = desc_meta.get("descriptor_name")
                         enriched_ann["descriptor_category"] = desc_meta.get("descriptor_category")
@@ -413,6 +422,18 @@ async def get_announcement_attachment(
         )
     except HTTPException:
         raise
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Timeout error getting attachment {announcement_id}: {e}")
+        raise HTTPException(
+            status_code=504,
+            detail=f"Request timed out. The attachment may be large or the server is experiencing high load. Please try again later."
+        )
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"Connection error getting attachment {announcement_id}: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Unable to connect to the server. Please check your internet connection and try again."
+        )
     except requests.exceptions.HTTPError as e:
         # Check if this is a "file not found" error
         # TrueData API sometimes returns 500 with "File does not exist" instead of 404
@@ -430,13 +451,39 @@ async def get_announcement_attachment(
                         is_not_found = True
         
         if is_not_found:
-            raise HTTPException(status_code=404, detail=f"Attachment not found for announcement {announcement_id}")
+            logger.info(f"Attachment not found for announcement {announcement_id}")
+            raise HTTPException(status_code=404, detail=f"Attachment not found for announcement {announcement_id}. The file may not be available.")
         
-        logger.error(f"HTTP error getting attachment: {e}")
-        raise HTTPException(status_code=e.response.status_code if e.response else 500, detail=f"Error fetching attachment: {str(e)}")
+        # For other HTTP errors, provide more context
+        status_code = e.response.status_code if e.response else 500
+        error_detail = f"Error fetching attachment"
+        if e.response:
+            error_text = e.response.text[:200] if hasattr(e.response, 'text') else str(e.response)
+            if error_text:
+                error_detail += f": {error_text}"
+        
+        logger.error(f"HTTP error getting attachment {announcement_id}: {status_code} - {error_detail}")
+        raise HTTPException(status_code=status_code, detail=error_detail)
     except Exception as e:
-        logger.error(f"Error getting attachment: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error fetching attachment: {str(e)}")
+        error_msg = str(e)
+        logger.error(f"Error getting attachment {announcement_id}: {error_msg}", exc_info=True)
+        
+        # Provide user-friendly error messages
+        if "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+            raise HTTPException(
+                status_code=504,
+                detail="Request timed out. Please try again later."
+            )
+        elif "connection" in error_msg.lower() or "connect" in error_msg.lower():
+            raise HTTPException(
+                status_code=503,
+                detail="Unable to connect to the server. Please check your connection and try again."
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error fetching attachment: {error_msg}"
+            )
 
 
 class RefreshDescriptorsRequest(BaseModel):

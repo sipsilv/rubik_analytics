@@ -6,9 +6,14 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     curl \
     dos2unix \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies
+# Set timezone early to avoid rebuilds
+ENV TZ=Asia/Kolkata
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Copy and install Python dependencies first for better layer caching
 COPY backend/requirements.txt ./requirements.txt
 
 # Install Python dependencies
@@ -41,12 +46,12 @@ RUN mkdir -p /app/data/auth/sqlite \
     && mkdir -p /app/data/backups \
     && chmod -R 755 /app/data
 
-# Fix line endings for Python files
-RUN find ./backend -type f -name "*.py" -exec dos2unix {} +
+# Fix line endings for Python files (skip if dos2unix fails on binary files)
+RUN find ./backend -type f -name "*.py" -exec dos2unix {} + || true
 
 # Copy entrypoint script
 COPY server/docker/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh && dos2unix /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh && dos2unix /app/entrypoint.sh || true
 
 EXPOSE 8000
 

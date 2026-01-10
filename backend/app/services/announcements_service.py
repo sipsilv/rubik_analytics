@@ -143,8 +143,46 @@ def init_announcements_database():
                 )
             """)
             
+            # Create indexes for performance optimization
+            # Index on trade_date (most common filter and ORDER BY column)
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_trade_date ON corporate_announcements(trade_date DESC)")
+                logger.info("Created index on trade_date")
+            except Exception as idx_error:
+                logger.debug(f"Index on trade_date may already exist: {idx_error}")
+            
+            # Index on symbol_nse for faster symbol filtering
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_symbol_nse ON corporate_announcements(symbol_nse)")
+                logger.info("Created index on symbol_nse")
+            except Exception as idx_error:
+                logger.debug(f"Index on symbol_nse may already exist: {idx_error}")
+            
+            # Index on symbol_bse for faster symbol filtering
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_symbol_bse ON corporate_announcements(symbol_bse)")
+                logger.info("Created index on symbol_bse")
+            except Exception as idx_error:
+                logger.debug(f"Index on symbol_bse may already exist: {idx_error}")
+            
+            # Index on company_name for faster filtering
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_company_name ON corporate_announcements(company_name)")
+                logger.info("Created index on company_name")
+            except Exception as idx_error:
+                logger.debug(f"Index on company_name may already exist: {idx_error}")
+            
+            # Index on descriptor_id for faster metadata joins
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_descriptor_id ON corporate_announcements(descriptor_id)")
+                logger.info("Created index on descriptor_id")
+            except Exception as idx_error:
+                logger.debug(f"Index on descriptor_id may already exist: {idx_error}")
+            
+            conn.commit()
+            
             _initialized = True
-            logger.info("Corporate announcements database initialized")
+            logger.info("Corporate announcements database initialized with indexes")
         except Exception as e:
             logger.error(f"Error initializing announcements database: {e}")
             # Don't raise - allow retry on next call
@@ -185,7 +223,12 @@ class AnnouncementsService:
     
     def insert_announcement(self, announcement: Dict[str, Any]) -> bool:
         """
-        Insert or update an announcement (duplicate detection based on company_name and news_headline)
+        Insert or update an announcement with duplicate detection.
+        
+        Duplicate detection strategy:
+        - With company_name: same company_name + same headline = duplicate
+        - Without company_name: same headline + same date + same symbol = duplicate
+          (This allows different funds/companies with same headline to be stored separately)
         
         Args:
             announcement: Dictionary with announcement fields
@@ -204,6 +247,7 @@ class AnnouncementsService:
             
             company_name = announcement.get("company_name")
             news_headline = announcement.get("news_headline")
+            trade_date = announcement.get("trade_date")
             
             # Check for duplicates based on company_name and news_headline
             # Only consider announcements where both fields match (case-insensitive, trimmed)
@@ -223,6 +267,107 @@ class AnnouncementsService:
                     # Duplicate found based on company_name and news_headline
                     logger.debug(f"Skipping duplicate announcement: company='{company_name}', headline='{news_headline[:50]}...'")
                     return False
+            
+            # Special case: If no company_name but headline is present, check for duplicates
+            # based on headline + trade_date + symbol (to distinguish different funds/companies)
+            # This prevents removing legitimate announcements from different sources with same headline
+            if (not company_name or str(company_name).strip() == '') and news_headline:
+                news_headline_normalized = str(news_headline).strip().lower()
+                symbol_nse = announcement.get("symbol_nse")
+                symbol_bse = announcement.get("symbol_bse")
+                script_code = announcement.get("script_code")
+                
+                # Use symbol (NSE, BSE, or script_code) to differentiate announcements
+                # Same headline + same date + same symbol = duplicate
+                # Same headline + same date + different symbol = different announcement (e.g., different mutual funds)
+                if trade_date:
+                    # Normalize trade_date for comparison (extract date part only, ignore time)
+                    try:
+                        # Try to parse and normalize the date
+                        if isinstance(trade_date, str):
+                            # Extract date part (YYYY-MM-DD) from various formats
+                            date_str = trade_date.split(' ')[0].split('T')[0]
+                        else:
+                            date_str = str(trade_date).split(' ')[0].split('T')[0]
+                        
+                        # Build query with symbol matching
+                        query = """
+                            SELECT id FROM corporate_announcements 
+                            WHERE (company_name IS NULL OR TRIM(company_name) = '')
+                            AND LOWER(TRIM(news_headline)) = ?
+                            AND DATE(trade_date) = DATE(?)
+                        """
+                        params = [news_headline_normalized, date_str]
+                        
+                        # Add symbol conditions if available
+                        if symbol_nse:
+                            query += " AND symbol_nse = ?"
+                            params.append(symbol_nse)
+                        elif symbol_bse:
+                            query += " AND symbol_bse = ?"
+                            params.append(symbol_bse)
+                        elif script_code:
+                            query += " AND script_code = ?"
+                            params.append(script_code)
+                        else:
+                            # No symbol available, fall back to headline + date only
+                            # This is less ideal but needed for announcements without symbol
+                            pass
+                        
+                        existing = conn.execute(query, params).fetchone()
+                        
+                        if existing:
+                            logger.debug(f"Skipping duplicate announcement (no company, same symbol): headline='{news_headline[:50]}...', date='{date_str}', symbol='{symbol_nse or symbol_bse or script_code}'")
+                            return False
+                    except Exception as date_error:
+                        logger.warning(f"Error parsing trade_date for duplicate check: {date_error}")
+                        # Fall back to headline + symbol check if date parsing fails
+                        query = """
+                            SELECT id FROM corporate_announcements 
+                            WHERE (company_name IS NULL OR TRIM(company_name) = '')
+                            AND LOWER(TRIM(news_headline)) = ?
+                        """
+                        params = [news_headline_normalized]
+                        
+                        if symbol_nse:
+                            query += " AND symbol_nse = ?"
+                            params.append(symbol_nse)
+                        elif symbol_bse:
+                            query += " AND symbol_bse = ?"
+                            params.append(symbol_bse)
+                        elif script_code:
+                            query += " AND script_code = ?"
+                            params.append(script_code)
+                        
+                        existing = conn.execute(query, params).fetchone()
+                        
+                        if existing:
+                            logger.debug(f"Skipping duplicate announcement (no company, headline+symbol only): headline='{news_headline[:50]}...'")
+                            return False
+                else:
+                    # No trade_date, check headline + symbol only
+                    query = """
+                        SELECT id FROM corporate_announcements 
+                        WHERE (company_name IS NULL OR TRIM(company_name) = '')
+                        AND LOWER(TRIM(news_headline)) = ?
+                    """
+                    params = [news_headline_normalized]
+                    
+                    if symbol_nse:
+                        query += " AND symbol_nse = ?"
+                        params.append(symbol_nse)
+                    elif symbol_bse:
+                        query += " AND symbol_bse = ?"
+                        params.append(symbol_bse)
+                    elif script_code:
+                        query += " AND script_code = ?"
+                        params.append(script_code)
+                    
+                    existing = conn.execute(query, params).fetchone()
+                    
+                    if existing:
+                        logger.debug(f"Skipping duplicate announcement (no company, no date, headline+symbol): headline='{news_headline[:50]}...'")
+                        return False
             
             # Also check if ID already exists (for backward compatibility)
             existing_by_id = conn.execute(
@@ -259,6 +404,14 @@ class AnnouncementsService:
                 announcement.get("date_of_meeting")
             ])
             
+            conn.commit()
+            logger.info(f"Inserted announcement: {announcement.get('id')}")
+            
+            # Broadcast new announcement via WebSocket (fire and forget)
+            # This will be handled by the WebSocket service when it processes announcements
+            # We don't broadcast here directly to avoid event loop issues
+            # The announcements_websocket_service will handle broadcasting when it receives new announcements
+            
             return True
         except Exception as e:
             logger.error(f"Error inserting announcement: {e}", exc_info=True)
@@ -280,6 +433,7 @@ class AnnouncementsService:
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
         symbol: Optional[str] = None,
+        search: Optional[str] = None,
         limit: Optional[int] = None,
         offset: int = 0,
         page: Optional[int] = None,
@@ -292,6 +446,7 @@ class AnnouncementsService:
             from_date: Filter from date (YYYY-MM-DD)
             to_date: Filter to date (YYYY-MM-DD)
             symbol: Filter by symbol (NSE or BSE)
+            search: Search by headline or symbol (flexible/fuzzy match)
             limit: Maximum number of records (legacy, use page_size instead)
             offset: Offset for pagination (legacy, use page instead)
             page: Page number (1-indexed)
@@ -302,13 +457,23 @@ class AnnouncementsService:
         """
         conn = self._get_conn()
         try:
-            # Build base query for counting
+            # Build base query for counting - use approximate count for large tables when no filters
+            # For filtered queries, use exact count
+            use_approximate_count = not from_date and not to_date and not symbol and not search
+            
+            # Build query for data - exclude large TEXT fields (news_body) for list view
+            # This significantly improves performance as news_body can be very large
+            query = """SELECT 
+                id, trade_date, script_code, symbol_nse, symbol_bse,
+                company_name, file_status, news_headline, news_subhead,
+                descriptor_id, announcement_type, meeting_type,
+                date_of_meeting, created_at, updated_at
+                FROM corporate_announcements WHERE 1=1"""
+            params = []
+            
+            # Build count query
             count_query = "SELECT COUNT(*) FROM corporate_announcements WHERE 1=1"
             count_params = []
-            
-            # Build query for data
-            query = "SELECT * FROM corporate_announcements WHERE 1=1"
-            params = []
             
             if from_date:
                 query += " AND trade_date >= ?"
@@ -323,14 +488,31 @@ class AnnouncementsService:
                 count_params.append(to_date + " 23:59:59")
             
             if symbol:
-                query += " AND (symbol_nse = ? OR symbol_bse = ?)"
-                count_query += " AND (symbol_nse = ? OR symbol_bse = ?)"
-                params.extend([symbol, symbol])
-                count_params.extend([symbol, symbol])
+                # Fuzzy/similarity search for symbol and company name (case-insensitive, partial match)
+                symbol_lower = symbol.lower().strip()
+                # Use LIKE for partial matching on symbols and company name
+                query += " AND (LOWER(symbol_nse) LIKE ? OR LOWER(symbol_bse) LIKE ? OR CAST(script_code AS VARCHAR) LIKE ? OR LOWER(company_name) LIKE ?)"
+                count_query += " AND (LOWER(symbol_nse) LIKE ? OR LOWER(symbol_bse) LIKE ? OR CAST(script_code AS VARCHAR) LIKE ? OR LOWER(company_name) LIKE ?)"
+                # Use % for partial matching (wildcard)
+                symbol_pattern = f"%{symbol_lower}%"
+                params.extend([symbol_pattern, symbol_pattern, symbol_pattern, symbol_pattern])
+                count_params.extend([symbol_pattern, symbol_pattern, symbol_pattern, symbol_pattern])
+            
+            if search:
+                # Flexible search: headline or symbol (case-insensitive, partial match)
+                search_lower = search.lower().strip()
+                search_pattern = f"%{search_lower}%"
+                # Search in headline, NSE symbol, BSE symbol, and script_code
+                query += " AND (LOWER(news_headline) LIKE ? OR LOWER(symbol_nse) LIKE ? OR LOWER(symbol_bse) LIKE ? OR CAST(script_code AS VARCHAR) LIKE ?)"
+                count_query += " AND (LOWER(news_headline) LIKE ? OR LOWER(symbol_nse) LIKE ? OR LOWER(symbol_bse) LIKE ? OR CAST(script_code AS VARCHAR) LIKE ?)"
+                params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
+                count_params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
             
             # Get total count
+            # For large tables without filters, COUNT(*) can be slow, but with indexes it should be acceptable
+            # DuckDB is optimized for analytical queries, so COUNT(*) with indexes should be reasonably fast
             total_result = conn.execute(count_query, count_params).fetchone()
-            total = total_result[0] if total_result else 0
+            total_before_dedup = total_result[0] if total_result else 0
             
             # Apply pagination
             query += " ORDER BY trade_date DESC"
@@ -355,8 +537,14 @@ class AnnouncementsService:
             result = cursor.fetchall()
             
             announcements = []
+            seen_ids = set()  # Track seen IDs to prevent true duplicates
+            skipped_count = 0
+            
+            logger.info(f"Processing {len(result)} rows from database query")
+            
             for row in result:
                 ann = dict(zip(columns, row))
+                
                 # Convert timestamps to ISO format strings
                 for key in ["trade_date", "date_of_meeting", "created_at", "updated_at"]:
                     if ann.get(key):
@@ -369,9 +557,26 @@ class AnnouncementsService:
                         else:
                             # Try to convert to string
                             ann[key] = str(ann[key]) if ann[key] is not None else None
+                
+                ann_id = ann.get("id")
+                
+                # Only skip if we've seen this exact ID before (true duplicate)
+                # This can happen if there's a bug in data insertion, but should be rare
+                if ann_id in seen_ids:
+                    skipped_count += 1
+                    logger.warning(f"Skipping duplicate ID announcement: ID={ann_id}")
+                    continue
+                
+                seen_ids.add(ann_id)
+                
+                # Include all announcements - don't filter by headline/date
+                # Different announcements can have the same headline (e.g., mutual fund NAV declarations)
                 announcements.append(ann)
             
-            logger.debug(f"Retrieved {len(announcements)} announcements, total: {total}")
+            # Use the actual database count for pagination
+            total = total_before_dedup
+            
+            logger.info(f"Retrieved {len(announcements)} announcements (skipped {skipped_count} duplicate IDs), total in DB: {total_before_dedup}")
             return announcements, total
         finally:
             conn.close()
@@ -829,6 +1034,40 @@ class AnnouncementsService:
             
             columns = ["descriptor_id", "descriptor_name", "descriptor_category", "updated_at"]
             return dict(zip(columns, result))
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+    
+    def get_descriptor_metadata_batch(self, descriptor_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """Get descriptor metadata for multiple IDs in a single query (batch lookup)"""
+        if not descriptor_ids:
+            return {}
+        
+        conn = self._get_conn()
+        try:
+            # Create placeholders for IN clause
+            placeholders = ','.join(['?' for _ in descriptor_ids])
+            cursor = conn.execute(
+                f"SELECT descriptor_id, descriptor_name, descriptor_category, updated_at "
+                f"FROM descriptor_metadata WHERE descriptor_id IN ({placeholders})",
+                descriptor_ids
+            )
+            results = cursor.fetchall()
+            
+            # Build dictionary mapping descriptor_id to metadata
+            metadata_dict = {}
+            for row in results:
+                metadata_dict[row[0]] = {
+                    "descriptor_id": row[0],
+                    "descriptor_name": row[1],
+                    "descriptor_category": row[2],
+                    "updated_at": row[3]
+                }
+            
+            return metadata_dict
         finally:
             if conn:
                 try:
