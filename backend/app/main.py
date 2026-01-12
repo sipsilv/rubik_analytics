@@ -414,6 +414,66 @@ async def startup_event():
         except Exception as e:
             print(f"  Symbol Auto-Upload: ERROR - {str(e)}")
         
+        print("-"*70)
+        
+        # Start Telegram Bot Polling Service
+        try:
+            from app.services.telegram_bot_service import TelegramBotService
+            from app.core.database import get_db
+            import asyncio
+            
+            # Check if Telegram connection exists and is enabled
+            db_session = next(get_db())
+            try:
+                from app.models.connection import Connection
+                telegram_conn = db_session.query(Connection).filter(
+                    Connection.connection_type == "TELEGRAM_BOT",
+                    Connection.is_enabled == True
+                ).first()
+                
+                if telegram_conn:
+                    # Start polling in background
+                    async def run_telegram_polling():
+                        """Background task to poll Telegram for /start commands"""
+                        import logging
+                        logger = logging.getLogger("telegram_bot")
+                        logger.setLevel(logging.INFO)
+                        
+                        while True:
+                            try:
+                                # Get fresh DB session for each iteration
+                                db = next(get_db())
+                                try:
+                                    bot_service = TelegramBotService(manager)
+                                    updates = await bot_service.get_updates()
+                                    
+                                    for update in updates:
+                                        try:
+                                            await bot_service.process_webhook_update(update, db)
+                                        except Exception as e:
+                                            logger.error(f"Error processing update: {e}")
+                                
+                                finally:
+                                    db.close()
+                                
+                                # Wait 10 seconds between polls (as requested)
+                                await asyncio.sleep(10)
+                            except Exception as e:
+                                logger.error(f"Telegram polling error: {e}")
+                                await asyncio.sleep(30)  # Wait longer on error
+                    
+                    # Create background task
+                    asyncio.create_task(run_telegram_polling())
+                    print(f"  Telegram Bot Poll : STARTED - Connection ID {telegram_conn.id}")
+                    print(f"    Poll Interval   : 10s")
+                    print(f"    Listening for   : /start commands for user linking")
+                else:
+                    print(f"  Telegram Bot Poll : SKIPPED - No active Telegram connection")
+            finally:
+                db_session.close()
+        except Exception as e:
+            print(f"  Telegram Bot Poll : ERROR - {str(e)}")
+        
         print("="*70)
         
         # Final startup message
@@ -473,6 +533,9 @@ app.include_router(symbols.router, prefix="/api/v1/admin/symbols", tags=["symbol
 app.include_router(screener.router, prefix="/api/v1/admin/screener", tags=["screener"])
 app.include_router(announcements.router, prefix="/api/v1/announcements", tags=["announcements"])
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
+from app.api.v1 import telegram, telegram_connect
+app.include_router(telegram.router, prefix="/api/v1/telegram", tags=["telegram"])
+app.include_router(telegram_connect.router, prefix="/api/v1/telegram", tags=["telegram_connect"])
 
 @app.get("/health")
 async def health_check():

@@ -24,7 +24,7 @@ def check_symbols():
         return
     
     print(f"Connecting to database: {db_path}")
-    conn = duckdb.connect(db_path)
+    conn = duckdb.connect(db_path, config={'allow_unsigned_extensions': True})
     
     try:
         # Check recent announcements

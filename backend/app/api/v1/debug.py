@@ -60,7 +60,7 @@ async def db_diagnostic(db: Session = Depends(get_db)):
                     if conn.provider.lower() in ["duckdb", "duckdb_direct"]:
                         try:
                             import duckdb
-                            test_conn = duckdb.connect(path, read_only=True)
+                            test_conn = duckdb.connect(path, read_only=False, config={'allow_unsigned_extensions': True})
                             
                             # Get table list
                             tables = test_conn.execute("SHOW TABLES").fetchall()

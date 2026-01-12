@@ -7,6 +7,7 @@ import { useAuthStore } from '@/lib/store'
 import { userAPI } from '@/lib/api'
 import { EditProfileModal } from '@/components/EditProfileModal'
 import { UserChangePasswordModal } from '@/components/UserChangePasswordModal'
+import { TelegramConnectCard } from '@/components/TelegramConnectCard'
 import { Edit, Key, User, Mail, Phone, UserCircle, Shield, Hash, Calendar } from 'lucide-react'
 import { SmartTooltip } from '@/components/ui/SmartTooltip'
 
@@ -15,12 +16,12 @@ export default function SettingsPage() {
   const [mounted, setMounted] = useState(false)
   const [editProfileModalOpen, setEditProfileModalOpen] = useState(false)
   const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false)
-  
+
   // Prevent hydration mismatch by only rendering user-dependent content after mount
   useEffect(() => {
     setMounted(true)
   }, [])
-  
+
   // Refresh user data on mount to ensure we have latest data
   useEffect(() => {
     const refreshUserData = async () => {
@@ -70,7 +71,7 @@ export default function SettingsPage() {
                 </span>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2.5 p-2.5 rounded-lg bg-[#1a2332]/30 dark:bg-[#1a2332]/20 border border-border-subtle hover:border-primary/40 hover:shadow-md transition-all duration-200">
               <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/15 flex items-center justify-center border border-primary/20 dark:border-primary/30">
                 <User className="w-4.5 h-4.5 text-primary dark:text-[#60a5fa]" />
@@ -82,7 +83,7 @@ export default function SettingsPage() {
                 </span>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2.5 p-2.5 rounded-lg bg-[#1a2332]/30 dark:bg-[#1a2332]/20 border border-border-subtle hover:border-primary/40 hover:shadow-md transition-all duration-200">
               <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/15 flex items-center justify-center border border-primary/20 dark:border-primary/30">
                 <UserCircle className="w-4.5 h-4.5 text-primary dark:text-[#60a5fa]" />
@@ -94,7 +95,7 @@ export default function SettingsPage() {
                 </span>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2.5 p-2.5 rounded-lg bg-[#1a2332]/30 dark:bg-[#1a2332]/20 border border-border-subtle hover:border-primary/40 hover:shadow-md transition-all duration-200">
               <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/15 flex items-center justify-center border border-primary/20 dark:border-primary/30">
                 <Mail className="w-4.5 h-4.5 text-primary dark:text-[#60a5fa]" />
@@ -106,7 +107,7 @@ export default function SettingsPage() {
                 </span>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2.5 p-2.5 rounded-lg bg-[#1a2332]/30 dark:bg-[#1a2332]/20 border border-border-subtle hover:border-primary/40 hover:shadow-md transition-all duration-200">
               <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/15 flex items-center justify-center border border-primary/20 dark:border-primary/30">
                 <Phone className="w-4.5 h-4.5 text-primary dark:text-[#60a5fa]" />
@@ -118,7 +119,7 @@ export default function SettingsPage() {
                 </span>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2.5 p-2.5 rounded-lg bg-[#1a2332]/30 dark:bg-[#1a2332]/20 border border-border-subtle hover:border-primary/40 hover:shadow-md transition-all duration-200">
               <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/15 flex items-center justify-center border border-primary/20 dark:border-primary/30">
                 <Shield className="w-4.5 h-4.5 text-primary dark:text-[#60a5fa]" />
@@ -141,7 +142,7 @@ export default function SettingsPage() {
               <div className="flex-1 min-w-0">
                 <span className="block text-[10px] font-sans font-medium text-text-secondary uppercase tracking-wider mb-0.5">Created Date</span>
                 <span className="text-xs font-sans font-semibold text-text-primary truncate" suppressHydrationWarning>
-                  {user?.created_at 
+                  {user?.created_at
                     ? (mounted ? new Date(user.created_at).toLocaleString() : 'Loading...')
                     : 'N/A'}
                 </span>
@@ -151,8 +152,8 @@ export default function SettingsPage() {
 
           {/* Action Buttons Row */}
           <div className="flex items-center gap-2 justify-end pt-1 border-t border-border-subtle">
-            <Button 
-              variant="primary" 
+            <Button
+              variant="primary"
               size="sm"
               onClick={() => setEditProfileModalOpen(true)}
               className="px-3 py-1.5 text-xs"
@@ -160,8 +161,8 @@ export default function SettingsPage() {
               <Edit className="w-3.5 h-3.5 mr-1.5 btn-icon-hover icon-button icon-button-bounce" aria-label="Edit Profile" />
               Edit Profile
             </Button>
-            <Button 
-              variant="primary" 
+            <Button
+              variant="primary"
               size="sm"
               onClick={() => setChangePasswordModalOpen(true)}
               className="px-3 py-1.5 text-xs"
@@ -172,6 +173,9 @@ export default function SettingsPage() {
           </div>
         </div>
       </Card>
+
+      {/* Security & Notifications */}
+      <TelegramConnectCard />
 
       <EditProfileModal
         isOpen={editProfileModalOpen}
@@ -184,8 +188,8 @@ export default function SettingsPage() {
         isOpen={changePasswordModalOpen}
         onClose={() => setChangePasswordModalOpen(false)}
         user={user}
-        onUpdate={() => {}}
+        onUpdate={() => { }}
       />
-    </div>
+    </div >
   )
 }

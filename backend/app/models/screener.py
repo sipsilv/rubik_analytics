@@ -43,7 +43,7 @@ def init_screener_database():
     db_path = get_screener_db_path()
     
     try:
-        conn = duckdb.connect(db_path)
+        conn = duckdb.connect(db_path, config={'allow_unsigned_extensions': True})
         
         # Create unified time-series table
         conn.execute("""
@@ -253,7 +253,7 @@ def get_db_connection():
     
     for attempt in range(max_retries):
         try:
-            conn = duckdb.connect(db_path, read_only=False)
+            conn = duckdb.connect(db_path, read_only=False, config={'allow_unsigned_extensions': True})
             conn.execute("SET enable_progress_bar=false")
             conn.execute("SET threads=1")
             try:

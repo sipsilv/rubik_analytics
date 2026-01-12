@@ -37,7 +37,13 @@ class DuckDBSQLAlchemyClient(DatabaseClient):
                 # Format: duckdb:///path/to/database.duckdb
                 # Requires duckdb-engine package for SQLAlchemy integration
                 connection_string = f"duckdb:///{self.db_path}"
-                self.engine = create_engine(connection_string, pool_pre_ping=True)
+                # Pass config params via connect_args
+                connect_args = {
+                    'config': {
+                        'allow_unsigned_extensions': True
+                    }
+                }
+                self.engine = create_engine(connection_string, pool_pre_ping=True, connect_args=connect_args)
                 
                 # Test the connection by creating a session
                 test_sessionmaker = sessionmaker(bind=self.engine)

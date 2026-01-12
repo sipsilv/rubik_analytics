@@ -17,12 +17,15 @@ interface User {
   last_seen?: string
   last_active_at?: string
   is_online?: boolean
+  telegram_chat_id?: string // For Telegram integration
+  two_factor_enabled?: boolean // For 2FA
 }
 
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
   setUser: (user: User | null) => void
+  refreshUser: () => Promise<void>
   logout: () => void
 }
 
@@ -32,7 +35,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
   // Initialize from cookies if available
   let initialUser: User | null = null
   let initialAuth = false
-  
+
   if (typeof window !== 'undefined') {
     try {
       const userStr = Cookies.get('user')
@@ -53,17 +56,17 @@ export const useAuthStore = create<AuthState>((set, get) => {
         try {
           const authData = JSON.parse(e.newValue)
           const { user, isAuthenticated } = authData
-          
+
           // Only update if the state actually changed
           const currentState = get()
-          if (currentState.isAuthenticated !== isAuthenticated || 
-              JSON.stringify(currentState.user) !== JSON.stringify(user)) {
+          if (currentState.isAuthenticated !== isAuthenticated ||
+            JSON.stringify(currentState.user) !== JSON.stringify(user)) {
             set({ user, isAuthenticated })
-            
+
             // Sync cookies if needed (should already be in sync, but ensure consistency)
             if (isAuthenticated && user) {
-              Cookies.set('user', JSON.stringify(user), { 
-                expires: 1, 
+              Cookies.set('user', JSON.stringify(user), {
+                expires: 1,
                 sameSite: 'lax',
                 secure: window.location.protocol === 'https:'
               })
@@ -88,25 +91,25 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
     window.addEventListener('storage', handleStorageChange)
   }
-  
+
   return {
     user: initialUser,
     isAuthenticated: initialAuth,
     setUser: (user) => {
       if (user) {
-        Cookies.set('user', JSON.stringify(user), { 
-          expires: 1, 
+        Cookies.set('user', JSON.stringify(user), {
+          expires: 1,
           sameSite: 'lax',
           secure: typeof window !== 'undefined' && window.location.protocol === 'https:'
         })
         set({ user, isAuthenticated: true })
-        
+
         // Sync to localStorage to notify other tabs
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ 
-              user, 
-              isAuthenticated: true 
+            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+              user,
+              isAuthenticated: true
             }))
           } catch (error) {
             console.error('Error syncing auth state to localStorage:', error)
@@ -115,7 +118,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       } else {
         Cookies.remove('user')
         set({ user: null, isAuthenticated: false })
-        
+
         // Sync to localStorage to notify other tabs
         if (typeof window !== 'undefined') {
           try {
@@ -126,11 +129,20 @@ export const useAuthStore = create<AuthState>((set, get) => {
         }
       }
     },
+    refreshUser: async () => {
+      try {
+        const { userAPI } = await import('@/lib/api')
+        const user = await userAPI.getCurrentUser()
+        get().setUser(user)
+      } catch (error) {
+        console.error("Failed to refresh user:", error)
+      }
+    },
     logout: () => {
       Cookies.remove('auth_token')
       Cookies.remove('user')
       set({ user: null, isAuthenticated: false })
-      
+
       // Sync to localStorage to notify other tabs
       if (typeof window !== 'undefined') {
         try {
@@ -203,7 +215,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
   initializeTheme: (userTheme) => {
     // Priority: user preference > localStorage > default (dark)
     let theme: 'dark' | 'light' = 'dark'
-    
+
     if (userTheme && (userTheme === 'dark' || userTheme === 'light')) {
       theme = userTheme as 'dark' | 'light'
     } else if (typeof window !== 'undefined') {
@@ -212,7 +224,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
         theme = stored as 'dark' | 'light'
       }
     }
-    
+
     set({ theme })
     // Apply theme class to html element before render
     if (typeof window !== 'undefined') {

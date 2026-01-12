@@ -21,14 +21,14 @@ export default function ConnectionsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isViewOpen, setIsViewOpen] = useState(false)
   const hasLoadedRef = useRef(false)
-  
+
   // Find TrueData connection (normalize spaces and handle variations)
   const trueDataConnection = connections.find(c => {
     if (!c.provider) return false
     const provider = c.provider.toUpperCase().replace(/\s+/g, '').replace(/[_-]/g, '')
     return provider === 'TRUEDATA' || provider.includes('TRUEDATA')
   })
-  
+
   // Debug: Log connections to console
   useEffect(() => {
     if (connections.length > 0) {
@@ -47,7 +47,7 @@ export default function ConnectionsPage() {
     // Prevent double call in React Strict Mode
     if (hasLoadedRef.current) return
     hasLoadedRef.current = true
-    
+
     loadConnections()
   }, [])
 
@@ -100,8 +100,8 @@ export default function ConnectionsPage() {
       color: 'info'
     },
     SOCIAL: {
-      total: connections.filter(c => c.connection_type === 'SOCIAL').length,
-      connected: connections.filter(c => c.connection_type === 'SOCIAL' && c.status === 'CONNECTED').length,
+      total: connections.filter(c => ['SOCIAL', 'TELEGRAM_BOT', 'TELEGRAM_USER'].includes(c.connection_type)).length,
+      connected: connections.filter(c => ['SOCIAL', 'TELEGRAM_BOT', 'TELEGRAM_USER'].includes(c.connection_type) && c.status === 'CONNECTED').length,
       label: 'Messaging & Social',
       description: 'Telegram, social media, and messaging integrations',
       icon: MessageSquare,
@@ -132,8 +132,8 @@ export default function ConnectionsPage() {
     total: trueDataConnection ? 1 : 0,
     connected: trueDataConnection && trueDataConnection.status === 'CONNECTED' ? 1 : 0,
     label: 'TrueData',
-    description: trueDataConnection 
-      ? 'Master token provider for multiple app connections' 
+    description: trueDataConnection
+      ? 'Master token provider for multiple app connections'
       : 'Create TrueData connection to enable token-based authentication',
     icon: BarChart3,
     color: 'primary'
@@ -164,7 +164,7 @@ export default function ConnectionsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {connectionCategories.map((category) => {
           const IconComponent = category.icon
-          
+
           // Special handling for TrueData - show the detailed card
           if (category.key === 'TRUEDATA' && trueDataConnection) {
             return (
@@ -180,7 +180,7 @@ export default function ConnectionsPage() {
               />
             )
           }
-          
+
           return (
             <Card key={category.key} className="hover:shadow-lg transition-all duration-200 h-full border-2">
               <div className="p-6">
@@ -200,7 +200,7 @@ export default function ConnectionsPage() {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Stats Grid */}
                 {loading ? (
                   <div className="py-8 text-center text-text-secondary">Loading...</div>
@@ -217,25 +217,22 @@ export default function ConnectionsPage() {
                     </div>
 
                     {/* Connected */}
-                    <div className={`text-center p-4 rounded-lg border ${
-                      category.connected > 0
-                        ? 'bg-success/10 dark:bg-[#10b981]/10 border-success/20'
-                        : 'bg-text-secondary/10 dark:bg-[#6b7280]/10 border-text-secondary/20'
-                    }`}>
-                      <div className={`text-3xl font-bold font-sans mb-1 ${
-                        category.connected > 0 ? 'text-success' : 'text-text-secondary dark:text-[#9ca3af]'
+                    <div className={`text-center p-4 rounded-lg border ${category.connected > 0
+                      ? 'bg-success/10 dark:bg-[#10b981]/10 border-success/20'
+                      : 'bg-text-secondary/10 dark:bg-[#6b7280]/10 border-text-secondary/20'
                       }`}>
+                      <div className={`text-3xl font-bold font-sans mb-1 ${category.connected > 0 ? 'text-success' : 'text-text-secondary dark:text-[#9ca3af]'
+                        }`}>
                         {category.connected}
                       </div>
-                      <div className={`text-xs font-sans uppercase tracking-wider ${
-                        category.connected > 0 ? 'text-success' : 'text-text-secondary dark:text-[#9ca3af]'
-                      }`}>
+                      <div className={`text-xs font-sans uppercase tracking-wider ${category.connected > 0 ? 'text-success' : 'text-text-secondary dark:text-[#9ca3af]'
+                        }`}>
                         Connected
                       </div>
                     </div>
                   </div>
                 )}
-                
+
                 <p className="text-sm font-sans text-text-secondary dark:text-[#9ca3af] mb-4">
                   {category.key === 'INTERNAL' && 'Manage database connections for authentication, analytics, and reference data.'}
                   {category.key === 'BROKER' && 'Configure trading platforms and broker API integrations for automated trading.'}
@@ -245,9 +242,9 @@ export default function ConnectionsPage() {
                 </p>
                 {category.key === 'TRUEDATA' ? (
                   !trueDataConnection && (
-                    <Button 
-                      variant="primary" 
-                      size="sm" 
+                    <Button
+                      variant="primary"
+                      size="sm"
                       className="w-full"
                       onClick={() => {
                         setIsAddOpen(true)
@@ -263,21 +260,13 @@ export default function ConnectionsPage() {
                     </Button>
                   )
                 ) : (
-                  <Button 
-                    variant="primary" 
-                    size="sm" 
+                  <Button
+                    variant="primary"
+                    size="sm"
                     className="w-full"
                     onClick={() => {
-                      // Filter connections by category and show in modal
-                      const categoryConnections = connections.filter(c => c.connection_type === category.key)
-                      if (categoryConnections.length > 0) {
-                        // Show first connection in view modal, or could show a list
-                        setSelectedConn(categoryConnections[0])
-                        setIsViewOpen(true)
-                      } else {
-                        // No connections, open add modal
-                        setIsAddOpen(true)
-                      }
+                      // Navigate to list view
+                      router.push(`/admin/connections/list?category=${category.key}`)
                     }}
                   >
                     <Settings className="w-4 h-4" />

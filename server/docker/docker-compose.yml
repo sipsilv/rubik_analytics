@@ -12,6 +12,7 @@ services:
     ports:
       - "${BACKEND_PORT}:8000"
     environment:
+<<<<<<< HEAD
       DATA_DIR: ${DATA_DIR}
       DATABASE_URL: ${DATABASE_URL}
       DUCKDB_PATH: ${DUCKDB_PATH}
@@ -29,6 +30,27 @@ services:
 
       TRUEDATA_DEFAULT_AUTH_URL: ${TRUEDATA_DEFAULT_AUTH_URL}
       TRUEDATA_DEFAULT_WEBSOCKET_PORT: ${TRUEDATA_DEFAULT_WEBSOCKET_PORT}
+=======
+      - DATA_DIR=/app/data
+      - DATABASE_URL=sqlite:////app/data/auth/sqlite/auth.db
+      - DUCKDB_PATH=/app/data/analytics/duckdb
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_SYSTEM_SECRET_KEY=${JWT_SYSTEM_SECRET_KEY}
+      - JWT_ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=480
+      - IDLE_TIMEOUT_MINUTES=30
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000,http://rubik-frontend:3000}
+      - TRUEDATA_DEFAULT_AUTH_URL=${TRUEDATA_DEFAULT_AUTH_URL:-https://auth.truedata.in/token}
+      - TRUEDATA_DEFAULT_WEBSOCKET_PORT=${TRUEDATA_DEFAULT_WEBSOCKET_PORT:-8086}
+      - TZ=${TZ:-Asia/Kolkata}
+      # Admin user creation (optional - only used on first startup)
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      # Telegram Integration
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-}
+>>>>>>> 9465aa97346224605eca8869a244792d42797f03
     volumes:
       - ${DATA_VOLUME}:/app/data
     restart: unless-stopped

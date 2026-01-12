@@ -11,6 +11,8 @@ class ConnectionType(str, enum.Enum):
     NEWS = "NEWS"
     SOCIAL = "SOCIAL"
     INTERNAL = "INTERNAL"
+    TELEGRAM_BOT = "TELEGRAM_BOT"
+    TELEGRAM_USER = "TELEGRAM_USER"
 
 class ConnectionStatus(str, enum.Enum):
     CONNECTED = "CONNECTED"

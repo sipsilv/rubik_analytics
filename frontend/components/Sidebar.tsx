@@ -44,7 +44,7 @@ const mainNavItems: NavItem[] = [
   { name: 'Analytics', href: '/analytics', icon: BarChart3, color: 'text-success' },
   { name: 'Reports', href: '/reports', icon: FileText, color: 'text-primary' },
   { name: 'Announcements', href: '/announcements', icon: Bell, color: 'text-warning' },
-  { name: 'Screener', href: '/users/screener', icon: BarChart3, color: 'text-info' },
+
   { name: 'Feature & Feedback', href: '/feature-feedback', icon: MessageSquare, color: 'text-primary' },
   { name: 'Settings', href: '/settings', icon: Settings, color: 'text-warning' },
 ]
@@ -119,9 +119,7 @@ export function Sidebar() {
     if (href === '/feature-feedback') {
       return pathname?.startsWith('/feature-feedback')
     }
-    if (href === '/users/screener') {
-      return pathname?.startsWith('/users/screener')
-    }
+    // Removed screener route logic
     return pathname === href
   }
 
@@ -135,12 +133,12 @@ export function Sidebar() {
     }
 
     // Don't show sub-items for Request & Feedback pages (navigation removed - using back navigation instead)
-    if (pathname === '/admin/requests-feedback' || 
-        pathname === '/admin/requests') {
+    if (pathname === '/admin/requests-feedback' ||
+      pathname === '/admin/requests') {
       clearSubItems()
       return
     }
-    
+
     // Don't show sub-items for Feature & Feedback user pages
     if (pathname?.startsWith('/feature-feedback')) {
       clearSubItems()
@@ -196,178 +194,178 @@ export function Sidebar() {
         </span>
       </button>
 
-    <aside
+      <aside
         className={`relative h-screen bg-panel dark:bg-[#0a1020] border-r border-border dark:border-[#1f2a44] transition-[width] duration-300 ease-in-out flex flex-col flex-shrink-0 overflow-hidden ${collapsed ? 'w-16' : 'w-64'
-      }`}
+          }`}
         style={{
           transition: 'width 300ms cubic-bezier(0.4, 0, 0.2, 1)'
         }}
-    >
+      >
         {/* Logo */}
-      <div className="flex flex-col items-center justify-center border-b border-border dark:border-[#1f2a44] px-3 py-4 flex-shrink-0 min-h-[64px] relative">
+        <div className="flex flex-col items-center justify-center border-b border-border dark:border-[#1f2a44] px-3 py-4 flex-shrink-0 min-h-[64px] relative">
           {/* RUBIK - Full text, fades out smoothly when collapsing */}
           <h1 className={`text-base font-sans font-semibold text-text-primary tracking-tight transition-all duration-300 ease-in-out text-center absolute ${collapsed ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
-        }`}>
-          RUBIK
-        </h1>
+            }`}>
+            RUBIK
+          </h1>
           {/* R - Single letter, stays still with cool animation when collapsed */}
           <div className={`text-xl font-sans font-bold text-primary flex items-center justify-center absolute transition-all duration-300 ease-in-out ${collapsed ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
-        }`}
-        style={{
-          animation: collapsed ? 'pulse-glow 2s ease-in-out infinite' : 'none',
-          textShadow: collapsed ? '0 0 8px rgba(59, 130, 246, 0.5), 0 0 12px rgba(59, 130, 246, 0.3)' : 'none',
-        }}>
-          R
+            }`}
+            style={{
+              animation: collapsed ? 'pulse-glow 2s ease-in-out infinite' : 'none',
+              textShadow: collapsed ? '0 0 8px rgba(59, 130, 246, 0.5), 0 0 12px rgba(59, 130, 246, 0.3)' : 'none',
+            }}>
+            R
+          </div>
         </div>
-      </div>
 
-      {/* Scrollable Navigation Area */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 py-3" style={{ scrollBehavior: 'smooth' }}>
-        <div className="px-2 space-y-0.5">
-          {/* Main Navigation Items */}
-          {mainNavItems.map((item) => {
-            const active = isActive(item.href)
-            const IconComponent = item.icon
-            return (
-              <SidebarTooltip key={item.href} text={item.name} collapsed={collapsed}>
-                <Link
-                  href={item.href}
-                    className={`group relative flex items-center ${collapsed ? 'justify-center' : 'justify-start'} px-3 py-2 rounded-lg transition-all duration-200 ease-in-out min-h-[38px] active:scale-[0.98] focus:outline-none w-full ${active
+        {/* Scrollable Navigation Area */}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 py-3" style={{ scrollBehavior: 'smooth' }}>
+          <div className="px-2 space-y-0.5">
+            {/* Main Navigation Items */}
+            {mainNavItems.map((item) => {
+              const active = isActive(item.href)
+              const IconComponent = item.icon
+              return (
+                <SidebarTooltip key={item.href} text={item.name} collapsed={collapsed}>
+                  <Link
+                    href={item.href}
+                    className={`group relative flex items-center justify-start py-2 rounded-lg transition-all duration-200 ease-in-out min-h-[38px] active:scale-[0.98] focus:outline-none w-full ${active
                       ? 'bg-[#f1f5f9] dark:bg-[#182447] text-text-primary font-semibold'
                       : 'text-text-secondary hover:bg-[#f3f4f6] dark:hover:bg-[#182447]/60 hover:text-text-primary'
-                  }`}
-                >
-                  {/* Icon - Always rendered, fixed size and position */}
-                  <div className={`flex-shrink-0 w-5 h-5 flex items-center justify-center ${collapsed ? '' : 'mr-3'}`}>
-                      <IconComponent className={`w-5 h-5 transition-all duration-300 ease-in-out ${active 
-                        ? 'scale-110' 
+                      }`}
+                  >
+                    {/* Icon - Fixed width container for stable alignment rail */}
+                    <div className="flex-shrink-0 w-[48px] flex items-center justify-center">
+                      <IconComponent className={`w-5 h-5 transition-all duration-300 ease-in-out ${active
+                        ? 'scale-110'
                         : 'group-hover:scale-110'
-                      }`} 
-                      style={{
-                        color: 'transparent',
-                        filter: 'none',
-                        strokeWidth: active ? 2 : 1.5,
-                        fill: 'none',
-                        stroke: active 
-                          ? (item.color === 'text-primary' ? '#3b82f6' : item.color === 'text-success' ? '#10b981' : item.color === 'text-warning' ? '#f59e0b' : '#3b82f6')
-                          : (item.color === 'text-primary' ? '#9ca3af' : item.color === 'text-success' ? '#9ca3af' : item.color === 'text-warning' ? '#9ca3af' : '#9ca3af'),
-                        strokeLinejoin: 'round',
-                        strokeLinecap: 'round',
-                        paintOrder: 'stroke',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                      }} />
-                  </div>
-                  {/* Text - Absolutely positioned to prevent layout shift, opacity transition only */}
-                    <span className={`absolute left-[44px] top-1/2 -translate-y-1/2 text-[14.5px] font-sans leading-[1.5] whitespace-nowrap transition-all duration-300 ease-in-out ${active ? 'font-semibold' : 'font-medium'
+                        }`}
+                        style={{
+                          color: 'transparent',
+                          filter: 'none',
+                          strokeWidth: active ? 2 : 1.5,
+                          fill: 'none',
+                          stroke: active
+                            ? (item.color === 'text-primary' ? '#3b82f6' : item.color === 'text-success' ? '#10b981' : item.color === 'text-warning' ? '#f59e0b' : '#3b82f6')
+                            : (item.color === 'text-primary' ? '#9ca3af' : item.color === 'text-success' ? '#9ca3af' : item.color === 'text-warning' ? '#9ca3af' : '#9ca3af'),
+                          strokeLinejoin: 'round',
+                          strokeLinecap: 'round',
+                          paintOrder: 'stroke',
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                        }} />
+                    </div>
+                    {/* Text - Absolutely positioned to prevent layout shift, opacity transition only */}
+                    <span className={`absolute left-[54px] top-1/2 -translate-y-1/2 text-[14.5px] font-sans leading-[1.5] whitespace-nowrap transition-all duration-300 ease-in-out ${active ? 'font-semibold' : 'font-medium'
                       } ${collapsed
-                      ? 'opacity-0 pointer-events-none' 
-                      : 'opacity-100'
+                        ? 'opacity-0 pointer-events-none'
+                        : 'opacity-100'
+                      }`}>
+                      {item.name}
+                    </span>
+                  </Link>
+                </SidebarTooltip>
+              )
+            })}
+
+            {/* Spacer before ADMIN section - equal spacing */}
+            {/* Using padding-top to avoid space-y interference */}
+            {isAdmin && <div style={{ paddingTop: '1rem', width: '100%', display: 'block' }} />}
+
+            {/* Fixed Divider with ADMIN Label - Always visible, fixed position, no jumping */}
+            {isAdmin && (
+              <div className="relative mx-2 flex-shrink-0" style={{ paddingBottom: '1rem', display: 'block' }}>
+                {/* Divider Line - More visible */}
+                <div className="h-[1px] bg-gradient-to-r from-transparent via-border dark:via-[#1f2a44] to-transparent" />
+                {/* ADMIN Label - Fixed position, smooth fade with spacing */}
+                <div className={`absolute left-1/2 -translate-x-1/2 -top-2.5 px-3 py-0.5 bg-panel dark:bg-[#0a1020] transition-all duration-300 ease-in-out ${collapsed ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
                   }`}>
-                    {item.name}
+                  <span className="text-[11px] font-sans font-semibold text-text-muted uppercase tracking-wider">
+                    Admin
                   </span>
-                </Link>
-              </SidebarTooltip>
-            )
-          })}
-
-          {/* Spacer before ADMIN section - equal spacing */}
-          {/* Using padding-top to avoid space-y interference */}
-          {isAdmin && <div style={{ paddingTop: '1rem', width: '100%', display: 'block' }} />}
-
-          {/* Fixed Divider with ADMIN Label - Always visible, fixed position, no jumping */}
-          {isAdmin && (
-            <div className="relative mx-2 flex-shrink-0" style={{ paddingBottom: '1rem', display: 'block' }}>
-              {/* Divider Line - More visible */}
-              <div className="h-[1px] bg-gradient-to-r from-transparent via-border dark:via-[#1f2a44] to-transparent" />
-              {/* ADMIN Label - Fixed position, smooth fade with spacing */}
-              <div className={`absolute left-1/2 -translate-x-1/2 -top-2.5 px-3 py-0.5 bg-panel dark:bg-[#0a1020] transition-all duration-300 ease-in-out ${collapsed ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'
-              }`}>
-                <span className="text-[11px] font-sans font-semibold text-text-muted uppercase tracking-wider">
-                  Admin
-                </span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Admin Section */}
-          {isAdmin && (
-            <div>
-              <div className="space-y-1.5">
-                {adminNavItems.map((item, index) => {
-                  const active = isActive(item.href)
-                  const IconComponent = item.icon || Settings
-                  return (
-                    <SidebarTooltip key={item.href} text={item.name} collapsed={collapsed}>
-                      <Link
-                        href={item.href}
-                          className={`group relative flex items-center ${collapsed ? 'justify-center' : 'justify-start'} px-3 py-2 rounded-lg transition-all duration-200 ease-in-out min-h-[38px] active:scale-[0.98] focus:outline-none w-full ${active
+            {/* Admin Section */}
+            {isAdmin && (
+              <div>
+                <div className="space-y-1.5">
+                  {adminNavItems.map((item, index) => {
+                    const active = isActive(item.href)
+                    const IconComponent = item.icon || Settings
+                    return (
+                      <SidebarTooltip key={item.href} text={item.name} collapsed={collapsed}>
+                        <Link
+                          href={item.href}
+                          className={`group relative flex items-center justify-start py-2 rounded-lg transition-all duration-200 ease-in-out min-h-[38px] active:scale-[0.98] focus:outline-none w-full ${active
                             ? 'bg-[#f1f5f9] dark:bg-[#182447] text-text-primary font-semibold'
                             : 'text-text-secondary hover:bg-[#f3f4f6] dark:hover:bg-[#182447]/60 hover:text-text-primary'
-                        }`}
-                      >
-                        {/* Icon - Always rendered, fixed size and position with border-only styling */}
-                        <div className={`flex-shrink-0 w-5 h-5 flex items-center justify-center ${collapsed ? '' : 'mr-3'}`}>
-                            <IconComponent className={`w-5 h-5 transition-all duration-300 ease-in-out ${active 
-                              ? 'scale-110' 
+                            }`}
+                        >
+                          {/* Icon - Fixed width container for stable alignment rail */}
+                          <div className="flex-shrink-0 w-[48px] flex items-center justify-center">
+                            <IconComponent className={`w-5 h-5 transition-all duration-300 ease-in-out ${active
+                              ? 'scale-110'
                               : 'group-hover:scale-110'
-                            }`} 
-                            style={{
-                              color: 'transparent',
-                              filter: 'none',
-                              strokeWidth: active ? 2 : 1.5,
-                              fill: 'none',
-                              stroke: active 
-                                ? (item.color === 'text-primary' ? '#3b82f6' : item.color === 'text-success' ? '#10b981' : item.color === 'text-warning' ? '#f59e0b' : item.color === 'text-info' ? '#06b6d4' : '#3b82f6')
-                                : (item.color === 'text-primary' ? '#9ca3af' : item.color === 'text-success' ? '#9ca3af' : item.color === 'text-warning' ? '#9ca3af' : item.color === 'text-info' ? '#9ca3af' : '#9ca3af'),
-                              strokeLinejoin: 'round',
-                              strokeLinecap: 'round',
-                              paintOrder: 'stroke',
-                              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                            }} />
-                        </div>
-                        {/* Text - Absolutely positioned to prevent layout shift, opacity transition only */}
-                          <span className={`absolute left-[44px] top-1/2 -translate-y-1/2 text-[14.5px] font-sans leading-[1.5] whitespace-nowrap transition-all duration-300 ease-in-out ${active ? 'font-semibold' : 'font-medium'
+                              }`}
+                              style={{
+                                color: 'transparent',
+                                filter: 'none',
+                                strokeWidth: active ? 2 : 1.5,
+                                fill: 'none',
+                                stroke: active
+                                  ? (item.color === 'text-primary' ? '#3b82f6' : item.color === 'text-success' ? '#10b981' : item.color === 'text-warning' ? '#f59e0b' : item.color === 'text-info' ? '#06b6d4' : '#3b82f6')
+                                  : (item.color === 'text-primary' ? '#9ca3af' : item.color === 'text-success' ? '#9ca3af' : item.color === 'text-warning' ? '#9ca3af' : item.color === 'text-info' ? '#9ca3af' : '#9ca3af'),
+                                strokeLinejoin: 'round',
+                                strokeLinecap: 'round',
+                                paintOrder: 'stroke',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                              }} />
+                          </div>
+                          {/* Text - Absolutely positioned to prevent layout shift, opacity transition only */}
+                          <span className={`absolute left-[54px] top-1/2 -translate-y-1/2 text-[14.5px] font-sans leading-[1.5] whitespace-nowrap transition-all duration-300 ease-in-out ${active ? 'font-semibold' : 'font-medium'
                             } ${collapsed
-                            ? 'opacity-0 pointer-events-none' 
-                            : 'opacity-100'
-                        }`}>
-                          {item.name}
-                        </span>
-                      </Link>
-                    </SidebarTooltip>
-                  )
-                })}
+                              ? 'opacity-0 pointer-events-none'
+                              : 'opacity-100'
+                            }`}>
+                            {item.name}
+                          </span>
+                        </Link>
+                      </SidebarTooltip>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      </nav>
+            )}
+          </div>
+        </nav>
 
-      {/* Session Warning */}
-      <SessionWarning collapsed={collapsed} />
+        {/* Session Warning */}
+        <SessionWarning collapsed={collapsed} />
 
-      {/* Logout */}
-      <div className="border-t border-border p-2 flex-shrink-0">
-        <SidebarTooltip text="Logout" collapsed={collapsed}>
-          <button
-            onClick={handleLogout}
-            className={`group relative w-full flex items-center ${collapsed ? 'justify-center' : 'justify-start'} px-3 py-2 rounded-lg text-text-secondary hover:bg-[#f3f4f6] dark:hover:bg-[#182447]/60 hover:text-error transition-all duration-200 min-h-[38px] active:scale-[0.98] focus:outline-none`}
-          >
-            {/* Icon - Always rendered, fixed size and position */}
-            <div className={`flex-shrink-0 w-5 h-5 flex items-center justify-center ${collapsed ? '' : 'mr-3'}`}>
-              <LogOut className="w-5 h-5 text-text-secondary group-hover:text-error transition-colors duration-150" />
-            </div>
-            {/* Text - Absolutely positioned to prevent layout shift, opacity transition only */}
-              <span className={`absolute left-[44px] top-1/2 -translate-y-1/2 text-[14.5px] font-sans font-medium leading-[1.5] whitespace-nowrap transition-all duration-300 ease-in-out ${collapsed
-                ? 'opacity-0 pointer-events-none' 
+        {/* Logout */}
+        <div className="border-t border-border p-2 flex-shrink-0">
+          <SidebarTooltip text="Logout" collapsed={collapsed}>
+            <button
+              onClick={handleLogout}
+              className={`group relative w-full flex items-center justify-start py-2 rounded-lg text-text-secondary hover:bg-[#f3f4f6] dark:hover:bg-[#182447]/60 hover:text-error transition-all duration-200 min-h-[38px] active:scale-[0.98] focus:outline-none`}
+            >
+              {/* Icon - Fixed width container for stable alignment rail */}
+              <div className="flex-shrink-0 w-[48px] flex items-center justify-center">
+                <LogOut className="w-5 h-5 text-text-secondary group-hover:text-error transition-colors duration-150" />
+              </div>
+              {/* Text - Absolutely positioned to prevent layout shift, opacity transition only */}
+              <span className={`absolute left-[54px] top-1/2 -translate-y-1/2 text-[14.5px] font-sans font-medium leading-[1.5] whitespace-nowrap transition-all duration-300 ease-in-out ${collapsed
+                ? 'opacity-0 pointer-events-none'
                 : 'opacity-100'
-            }`}>
-              Logout
-            </span>
-          </button>
-        </SidebarTooltip>
-      </div>
-    </aside>
+                }`}>
+                Logout
+              </span>
+            </button>
+          </SidebarTooltip>
+        </div>
+      </aside>
     </>
   )
 }

@@ -22,9 +22,12 @@ export function EditProfileModal({ isOpen, onClose, user, onUpdate }: EditProfil
     name: '',
     email: '',
     mobile: '',
+    otp: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [otpRequired, setOtpRequired] = useState(false)
+  const [otpSent, setOtpSent] = useState(false)
 
   useEffect(() => {
     if (user && isOpen) {
@@ -32,8 +35,11 @@ export function EditProfileModal({ isOpen, onClose, user, onUpdate }: EditProfil
         name: user.name || '',
         email: user.email || '',
         mobile: user.mobile || '',
+        otp: '',
       })
       setError('') // Reset error when modal opens
+      setOtpRequired(false)
+      setOtpSent(false)
     }
   }, [user, isOpen])
 
@@ -57,7 +63,7 @@ export function EditProfileModal({ isOpen, onClose, user, onUpdate }: EditProfil
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    
+
     // Validation
     if (formData.email && formData.email.trim() && !validateEmail(formData.email)) {
       setError('Please enter a valid email address')
@@ -82,18 +88,33 @@ export function EditProfileModal({ isOpen, onClose, user, onUpdate }: EditProfil
         email: formData.email?.trim() || null,
         mobile: formData.mobile.trim(),
       }
-      
+
+      // Add OTP if provided
+      if (formData.otp) {
+        updateData.otp = formData.otp
+      }
+
       await userAPI.updateProfile(updateData)
-      
+
       // Refresh full user data from API to get all latest fields
       const refreshedUser = await userAPI.getCurrentUser()
       // Update user in store with complete refreshed data
       setUser(refreshedUser)
-      
+
       // Call onUpdate callback to refresh parent component
       onUpdate()
       onClose()
     } catch (err: any) {
+      // Check if OTP is required (403 error)
+      if (err.response?.status === 403) {
+        const errorDetail = err.response?.data?.detail || ''
+        if (errorDetail.includes('OTP')) {
+          setOtpRequired(true)
+          setOtpSent(true)
+          setError('OTP sent to your Telegram. Please check your Telegram and enter the code below.')
+          return
+        }
+      }
       setError(getErrorMessage(err, 'Failed to update profile'))
     } finally {
       setLoading(false)
@@ -147,6 +168,24 @@ export function EditProfileModal({ isOpen, onClose, user, onUpdate }: EditProfil
           required
         />
 
+        {otpRequired && otpSent && (
+          <div className="bg-primary/10 border border-primary/20 rounded p-3">
+            <p className="text-xs text-text-secondary mb-2">
+              🔐 You are changing sensitive information. An OTP has been sent to your Telegram account.
+            </p>
+            <Input
+              label="Enter OTP"
+              type="text"
+              value={formData.otp}
+              onChange={(e) => setFormData({ ...formData, otp: e.target.value })}
+              placeholder="Enter 6-digit OTP"
+              maxLength={6}
+              required
+              autoFocus
+            />
+          </div>
+        )}
+
         <ErrorMessage error={error} />
 
         <div className="flex gap-2 justify-end pt-2">
@@ -154,7 +193,7 @@ export function EditProfileModal({ isOpen, onClose, user, onUpdate }: EditProfil
             Cancel
           </Button>
           <Button type="submit" disabled={loading} size="sm">
-            {loading ? 'Saving...' : 'Save Changes'}
+            {loading ? 'Saving...' : (otpRequired ? 'Verify & Save' : 'Save Changes')}
           </Button>
         </div>
       </form>

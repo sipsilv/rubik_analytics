@@ -47,6 +47,17 @@ def get_db() -> Generator[Session, None, None]:
             detail="Authentication database not initialized. Please run initialization script."
         )
 
+def SessionLocal():
+    """
+    Stand-alone session factory for use in non-FastAPI contexts (e.g. scripts, background tasks).
+    Returns a new SQLAlchemy Session object.
+    """
+    router = get_db_router(settings.DATA_DIR)
+    auth_client = router.get_auth_db()
+    if auth_client:
+        return auth_client.get_session()
+    raise Exception("Authentication database not initialized")
+
 # get_symbols_db() function removed - symbols module has been removed
 
 def reset_connection_manager():
@@ -63,6 +74,7 @@ def reset_connection_manager():
 __all__ = [
     "Base",
     "get_db",
+    "SessionLocal",
     "get_connection_manager",
     "get_db_router",
     "reset_connection_manager",
