@@ -132,12 +132,15 @@ class AnnouncementsWebSocketService:
                     break
                 except Exception as e:
                     logger.error(f"Error processing WebSocket message: {e}")
+                    # Prevent tight loop if persistent error occurs
+                    await asyncio.sleep(1)
                     continue
                     
         except Exception as e:
             logger.error(f"Error in WebSocket listener: {e}")
         finally:
             self.running = False
+            logger.info("WebSocket listener stopped")
     
     async def _process_announcement(self, data: Dict[str, Any], service):
         """Process a single announcement message"""

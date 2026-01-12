@@ -35,7 +35,7 @@ def get_table_info_duckdb(db_path: Path) -> Dict:
         return {"exists": False, "tables": {}, "total_rows": 0, "size": 0}
     
     try:
-        conn = duckdb.connect(str(db_path))
+        conn = duckdb.connect(str(db_path), config={'allow_unsigned_extensions': True})
         tables = {}
         total_rows = 0
         
@@ -254,7 +254,7 @@ def consolidate_databases(db_info: Dict):
         else:
             print("No existing database found. Creating new primary database...")
             # Create empty database
-            conn = duckdb.connect(str(PRIMARY_DB))
+            conn = duckdb.connect(str(PRIMARY_DB), config={'allow_unsigned_extensions': True})
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS symbols (
                     id INTEGER PRIMARY KEY,
@@ -296,7 +296,7 @@ def consolidate_databases(db_info: Dict):
         try:
             if db_path.suffix == ".duckdb":
                 # For DuckDB, merge using pandas DataFrames
-                target_conn = duckdb.connect(str(PRIMARY_DB))
+                target_conn = duckdb.connect(str(PRIMARY_DB), config={'allow_unsigned_extensions': True})
                 source_conn = duckdb.connect(str(db_path))
                 
                 # Get tables from source
@@ -421,7 +421,7 @@ def consolidate_databases(db_info: Dict):
                 
                 tables = [row[0] for row in cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
                 
-                duckdb_conn = duckdb.connect(str(PRIMARY_DB))
+                duckdb_conn = duckdb.connect(str(PRIMARY_DB), config={'allow_unsigned_extensions': True})
                 
                 for table_name in tables:
                     try:

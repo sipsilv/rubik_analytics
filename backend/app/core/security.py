@@ -125,5 +125,8 @@ def decrypt_data(token: str) -> str:
         f = get_fernet()
         return f.decrypt(token.encode()).decode()
     except Exception as e:
-        print(f"[SECURITY] Decryption failed: {e}")
+        # Use logger instead of print, and only at warning level since this might be expected
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Decryption failed (this may be expected for legacy/corrupted data): {str(e)[:100]}")
         raise

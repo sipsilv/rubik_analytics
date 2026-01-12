@@ -30,7 +30,9 @@ class UserUpdate(BaseModel):
     mobile: Optional[str] = None
     theme_preference: Optional[str] = None  # dark, light
     role: Optional[str] = None  # user, admin (super_admin cannot be set via this endpoint)
-    
+    otp: Optional[str] = None  # For verifying sensitive changes
+    two_factor_enabled: Optional[bool] = None  # Enable/Disable 2FA
+
     @field_validator('email', mode='before')
     @classmethod
     def validate_email(cls, v):
@@ -66,6 +68,8 @@ class UserResponse(UserBase):
     last_seen: Optional[datetime] = None
     last_active_at: Optional[datetime] = None  # For live status
     is_online: Optional[bool] = None  # Real-time online status from WebSocket
+    telegram_chat_id: Optional[str] = None  # Telegram Chat ID for notifications
+    two_factor_enabled: bool = False  # 2FA status
     
     class Config:
         from_attributes = True

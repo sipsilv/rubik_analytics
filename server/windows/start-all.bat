@@ -162,15 +162,8 @@ set "DATA_DIR=%PROJECT_ROOT%/data"
 set "DATABASE_URL=sqlite:///%PROJECT_ROOT%/data/auth/sqlite/auth.db"
 set "DUCKDB_PATH=%PROJECT_ROOT%/data/analytics/duckdb"
 
-REM JWT Configuration
-set "JWT_SECRET_KEY=your-secret-key-change-in-production"
-set "JWT_SYSTEM_SECRET_KEY=your-system-secret-key-change-in-production"
-set "JWT_ALGORITHM=HS256"
-set "ACCESS_TOKEN_EXPIRE_MINUTES=480"
-set "IDLE_TIMEOUT_MINUTES=30"
-
-REM Security
-set "ENCRYPTION_KEY=jT7ACJPNHdp-IwKWVDto-vohgPGxwP_95sjBlgsr9Eg="
+REM JWT Configuration - Loaded from .env file
+REM Security - Loaded from .env file
 set "CORS_ORIGINS=http://localhost:3000,http://frontend:3000,http://127.0.0.1:3000,http://rubik-frontend:3000"
 
 REM TrueData
@@ -180,7 +173,7 @@ REM ----------------------------------------------------------------------------
 
 REM Start backend server directly
 REM Note: WebSocket connection logs are filtered in main.py, but HTTP access logs are kept
-start "Rubik Backend" cmd /k "cd /d "%BACKEND_DIR%" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+start "Rubik Backend" cmd /k "cd /d "%BACKEND_DIR%" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000 --env-file .env"
 
 timeout /t 5 /nobreak >nul
 

@@ -37,6 +37,48 @@ async def update_current_user(
 ):
     user = get_current_user(credentials, db)
     
+    # Check for sensitive changes requiring OTP
+    sensitive_change = False
+    if (user_update.email and user_update.email != user.email) or \
+       (user_update.mobile and user_update.mobile != user.mobile):
+        sensitive_change = True
+        
+    if sensitive_change and user.telegram_chat_id:
+        from app.services.telegram_notification_service import TelegramNotificationService
+        ns = TelegramNotificationService()
+        
+        if not user_update.otp:
+             # Generate and send OTP
+             otp = ns.generate_otp(user.mobile)
+             message = (
+                 f"🔐 <b>Profile Update Verification</b>\n\n"
+                 f"Hello <b>{user.username}</b>,\n\n"
+                 f"You are attempting to update sensitive information.\n"
+                 f"Your verification OTP is: <code>{otp}</code>\n\n"
+                 f"⏰ Valid for <b>5 minutes</b>\n"
+                 f"⚠️ If you didn't initiate this, secure your account immediately.\n\n"
+                 f"— Rubik Analytics Security Team"
+             )
+             await ns.bot_service.send_message(user.telegram_chat_id, message)
+             raise HTTPException(
+                 status_code=status.HTTP_403_FORBIDDEN,
+                 detail="OTP verification required for sensitive changes. Check your Telegram."
+             )
+        else:
+             # Verify OTP
+             if not ns.verify_otp(user.mobile, user_update.otp):
+                 raise HTTPException(
+                     status_code=status.HTTP_400_BAD_REQUEST,
+                     detail="Invalid or expired OTP"
+                 )
+
+    
+    # Track changes for notification BEFORE updating
+    changes_detail = []
+    old_email = user.email
+    old_mobile = user.mobile
+    old_name = user.name
+    
     # Update last active
     from datetime import datetime
     user.last_active_at = datetime.utcnow()
@@ -44,6 +86,8 @@ async def update_current_user(
     # Update name if provided
     if user_update.name is not None:
         user.name = user_update.name
+        if old_name != user_update.name:
+            changes_detail.append(f"Name: {old_name or 'None'} → {user_update.name}")
     
     if user_update.email is not None:
         # Check if email is already taken (if provided)
@@ -54,6 +98,8 @@ async def update_current_user(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Email already registered"
                 )
+        if old_email != user_update.email:
+            changes_detail.append(f"Email: {old_email or 'None'} → {user_update.email}")
         user.email = user_update.email
     
     if user_update.mobile is not None:
@@ -70,6 +116,8 @@ async def update_current_user(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Mobile number already registered"
             )
+        if old_mobile != user_update.mobile:
+            changes_detail.append(f"Mobile: {old_mobile or 'None'} → {user_update.mobile}")
         user.mobile = user_update.mobile.strip()
     
     if user_update.theme_preference is not None:
@@ -79,7 +127,34 @@ async def update_current_user(
                 detail="Theme preference must be 'dark' or 'light'"
             )
         user.theme_preference = user_update.theme_preference
+
+    if user_update.two_factor_enabled is not None:
+        if user_update.two_factor_enabled != user.two_factor_enabled:
+            action = "Enabled" if user_update.two_factor_enabled else "Disabled"
+            changes_detail.append(f"Two-Factor Auth: {action}")
+        user.two_factor_enabled = user_update.two_factor_enabled
     
+    # TELEGRAM ALERT - Send detailed changes
+    if user.telegram_chat_id and changes_detail:
+        try:
+            from app.services.telegram_notification_service import TelegramNotificationService
+            ns = TelegramNotificationService()
+            
+            # Build detailed change list
+            changes_text = "\n".join([f"• {change}" for change in changes_detail])
+            
+            message = (
+                f"✅ <b>Profile Updated Successfully</b>\n\n"
+                f"Hello <b>{user.username}</b>,\n\n"
+                f"The following changes have been made:\n\n"
+                f"{changes_text}\n\n"
+                f"⚠️ If you didn't make these changes, contact support immediately.\n\n"
+                f"— Rubik Analytics"
+            )
+            await ns.send_info_notification(user, message)
+        except Exception as e:
+            print(f"Failed to send profile update alert: {e}")
+
     user.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(user)
@@ -124,6 +199,33 @@ async def change_password(
     user.hashed_password = get_password_hash(password_data.new_password)
     user.updated_at = datetime.utcnow()
     db.commit()
+    
+    # TELEGRAM ALERT
+    if user.telegram_chat_id:
+        try:
+            from app.services.telegram_bot_service import TelegramBotService
+            from app.core.database import get_connection_manager
+            from app.core.config import settings
+            from datetime import datetime
+            
+            manager = get_connection_manager(settings.DATA_DIR)
+            bot = TelegramBotService(manager)
+            
+            now = datetime.now().strftime("%d-%b-%Y %I:%M %p")
+            message = (
+                f"🚨 <b>Security Alert: Password Changed</b>\n\n"
+                f"Hello <b>{user.username}</b>,\n\n"
+                f"Your account password was successfully changed.\n\n"
+                f"🕐 Time: <code>{now}</code>\n\n"
+                f"⚠️ <b>If you didn't make this change:</b>\n"
+                f"• Someone may have accessed your account\n"
+                f"• Contact support immediately\n"
+                f"• Secure all your linked accounts\n\n"
+                f"— Rubik Analytics Security Team"
+            )
+            await bot.send_message(user.telegram_chat_id, message)
+        except Exception as e:
+            print(f"Failed to send password alert: {e}")
     
     return {"message": "Password changed successfully"}
 

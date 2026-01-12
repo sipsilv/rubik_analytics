@@ -1,17 +1,26 @@
 from pydantic_settings import BaseSettings
 from typing import Optional, List, Union
 
+import os
+
 class Settings(BaseSettings):
-    # Data directory - reads from DATA_DIR environment variable, falls back to default
-    DATA_DIR: str = r"C:/Users/jallu/OneDrive/pgp/Python/Stock predictor/rubik-analytics/data"
+    # Base directory calculation (backend/app/core/config.py -> backend/)
+    BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    # Project root (backend/ -> root/)
+    PROJECT_ROOT: str = os.path.dirname(BASE_DIR)
+
+    # Data directory - reads from DATA_DIR environment variable, falls back to default relative path
+    # If running in Docker, DATA_DIR should be set to /app/data
+    # If running locally, it defaults to ../data relative to backend
+    DATA_DIR: str = os.getenv("DATA_DIR", os.path.join(PROJECT_ROOT, "data"))
     
     # Database (legacy - now using connection manager)
-    DATABASE_URL: str = "sqlite:///C:/Users/jallu/OneDrive/pgp/Python/Stock predictor/rubik-analytics/data/auth/sqlite/auth.db"
-    DUCKDB_PATH: str = r"C:/Users/jallu/OneDrive/pgp/Python/Stock predictor/rubik-analytics/data/analytics/duckdb"
+    DATABASE_URL: str = f"sqlite:///{os.path.join(DATA_DIR, 'auth/sqlite/auth.db')}"
+    DUCKDB_PATH: str = os.path.join(DATA_DIR, "analytics/duckdb")
     
     # JWT
-    JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
-    JWT_SYSTEM_SECRET_KEY: str = "your-system-secret-key-change-in-production"
+    JWT_SECRET_KEY: str
+    JWT_SYSTEM_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours
     IDLE_TIMEOUT_MINUTES: int = 30
@@ -20,7 +29,7 @@ class Settings(BaseSettings):
     # Generate a new key with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     # IMPORTANT: Change this in production! Store in .env file as ENCRYPTION_KEY
     # Note: Fernet keys must be valid base64url-encoded strings (44 characters, no leading/trailing dashes)
-    ENCRYPTION_KEY: str = "jT7ACJPNHdp-IwKWVDto-vohgPGxwP_95sjBlgsr9Eg="
+    ENCRYPTION_KEY: str
     
     # CORS - can be comma-separated string or list
     CORS_ORIGINS: Union[str, List[str]] = "http://localhost:3000"
@@ -41,5 +50,6 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 settings = Settings()

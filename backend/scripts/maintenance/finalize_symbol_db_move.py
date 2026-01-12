@@ -20,7 +20,7 @@ def check_database_info(db_path: Path):
         return None
     
     try:
-        conn = duckdb.connect(str(db_path), read_only=True)
+        conn = duckdb.connect(str(db_path), read_only=False, config={'allow_unsigned_extensions': True})
         tables = [row[0] for row in conn.execute("SHOW TABLES").fetchall()]
         symbol_count = 0
         if "symbols" in tables:

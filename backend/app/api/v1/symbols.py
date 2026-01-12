@@ -45,7 +45,7 @@ def init_symbols_database():
     
     try:
         # Use consistent connection configuration (same as get_db_connection)
-        conn = duckdb.connect(db_path)
+        conn = duckdb.connect(db_path, config={'allow_unsigned_extensions': True})
         conn.execute("PRAGMA enable_progress_bar=false")
         
         # Create symbols table
@@ -359,7 +359,8 @@ def get_db_connection():
             init_symbols_database()
         # Use consistent configuration - no read_only parameter (defaults to False)
         # All connections must use the same config to avoid conflicts
-        conn = duckdb.connect(db_path)
+        # Set allow_unsigned_extensions to true to match potential other connections (like duckdb-engine)
+        conn = duckdb.connect(db_path, config={'allow_unsigned_extensions': True})
         # Set consistent PRAGMA settings for all connections
         conn.execute("PRAGMA enable_progress_bar=false")
         return conn

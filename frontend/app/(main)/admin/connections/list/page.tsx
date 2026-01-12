@@ -1,0 +1,264 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { adminAPI } from '@/lib/api'
+import { Card } from '@/components/ui/Card'
+import { Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell } from '@/components/ui/Table'
+import { Button } from '@/components/ui/Button'
+import { ArrowLeft, RefreshCw, Settings, Trash2, Search, Plus, Eye, Edit } from 'lucide-react'
+import { ConnectionModal } from '@/components/ConnectionModal'
+import { ViewConnectionModal } from '@/components/ViewConnectionModal'
+import { DeleteConfirmationModal } from '@/components/DeleteConfirmationModal'
+
+export default function ConnectionListPage() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    const categoryParam = searchParams.get('category')
+
+    const [connections, setConnections] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+
+    // Modals
+    const [selectedConn, setSelectedConn] = useState<any>(null)
+    const [isAddOpen, setIsAddOpen] = useState(false)
+    const [isEditOpen, setIsEditOpen] = useState(false)
+    const [isViewOpen, setIsViewOpen] = useState(false)
+
+    // Delete Confirmation
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+    const [connToDelete, setConnToDelete] = useState<any>(null)
+    const [isDeleting, setIsDeleting] = useState(false)
+
+    // Filtered connections
+    const filteredConnections = connections.filter(c => {
+        if (!categoryParam) return true // Show all if no category
+        if (categoryParam === 'SOCIAL') {
+            return ['SOCIAL', 'TELEGRAM_BOT', 'TELEGRAM_USER'].includes(c.connection_type)
+        }
+        return c.connection_type === categoryParam
+    })
+
+    const loadConnections = async () => {
+        try {
+            setLoading(true)
+            const data = await adminAPI.getConnections()
+            setConnections(data || [])
+        } catch (e) {
+            console.error('Error loading connections:', e)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        loadConnections()
+    }, [])
+
+    const handleDeleteClick = (conn: any) => {
+        setConnToDelete(conn)
+        setDeleteModalOpen(true)
+    }
+
+    const handleConfirmDelete = async () => {
+        if (!connToDelete) return
+
+        try {
+            setIsDeleting(true)
+            await adminAPI.deleteConnection(connToDelete.id)
+            setDeleteModalOpen(false)
+            setConnToDelete(null)
+            loadConnections()
+        } catch (e) {
+            console.error('Error deleting connection:', e)
+            alert('Failed to delete connection')
+        } finally {
+            setIsDeleting(false)
+        }
+    }
+
+    const handleDelete = async (id: string) => {
+        // Deprecated - kept for reference if needed, but replaced by handleDeleteClick flow
+    }
+
+    const getCategoryLabel = (key: string | null) => {
+        if (!key) return 'All Connections'
+        const labels: Record<string, string> = {
+            'INTERNAL': 'Database Connections',
+            'BROKER': 'Broker APIs',
+            'NEWS': 'News Channels',
+            'SOCIAL': 'Messaging & Social',
+            'MARKET_DATA': 'Market Data',
+            'AI_ML': 'AI / ML Models',
+            'TRUEDATA': 'TrueData'
+        }
+        return labels[key] || key
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center gap-3">
+                <button
+                    onClick={() => router.push('/admin/connections')}
+                    className="text-text-secondary hover:text-text-primary transition-colors"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div>
+                    <h1 className="text-2xl font-sans font-semibold text-text-primary dark:text-[#e5e7eb] mb-1">
+                        {getCategoryLabel(categoryParam)}
+                    </h1>
+                    <p className="text-xs font-sans text-text-secondary dark:text-[#9ca3af]">
+                        Manage {categoryParam ? categoryParam.toLowerCase().replace('_', ' ') : 'all'} connections
+                    </p>
+                </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+                <div></div>
+                <div className="flex gap-2">
+                    <Button
+                        variant="secondary"
+                        onClick={loadConnections}
+                        size="sm"
+                        disabled={loading}
+                    >
+                        <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+                        Refresh
+                    </Button>
+                    <Button
+                        onClick={() => setIsAddOpen(true)}
+                        size="sm"
+                    >
+                        <Plus className="w-4 h-4 mr-1.5" />
+                        Add Connection
+                    </Button>
+                </div>
+            </div>
+
+            <Card>
+                <Table>
+                    <TableHeader>
+                        <TableHeaderCell>Name</TableHeaderCell>
+                        <TableHeaderCell>Provider</TableHeaderCell>
+                        <TableHeaderCell>Type</TableHeaderCell>
+                        <TableHeaderCell>Status</TableHeaderCell>
+                        <TableHeaderCell>Health</TableHeaderCell>
+                        <TableHeaderCell>Last Checked</TableHeaderCell>
+                        <TableHeaderCell className="text-right">Actions</TableHeaderCell>
+                    </TableHeader>
+                    <TableBody>
+                        {loading ? (
+                            <TableRow>
+                                <td colSpan={7} className="px-3 py-12 text-center text-text-secondary">
+                                    Loading connections...
+                                </td>
+                            </TableRow>
+                        ) : filteredConnections.length === 0 ? (
+                            <TableRow>
+                                <td colSpan={7} className="px-3 py-12 text-center text-text-secondary">
+                                    No connections found in this category.
+                                </td>
+                            </TableRow>
+                        ) : (
+                            filteredConnections.map((conn) => (
+                                <TableRow key={conn.id}>
+                                    <TableCell className="font-medium text-text-primary">
+                                        {conn.name}
+                                    </TableCell>
+                                    <TableCell>{conn.provider}</TableCell>
+                                    <TableCell>
+                                        <span className="text-xs px-2 py-1 bg-secondary/10 rounded-full font-mono">
+                                            {conn.connection_type}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <span className={`text-xs px-2 py-1 rounded-full font-bold ${conn.status === 'CONNECTED' ? 'bg-success/10 text-success' :
+                                            conn.status === 'ERROR' ? 'bg-error/10 text-error' :
+                                                'bg-warning/10 text-warning'
+                                            }`}>
+                                            {conn.status}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <span className={`text-xs ${conn.health === 'HEALTHY' ? 'text-success' :
+                                            conn.health === 'DOWN' ? 'text-error' :
+                                                'text-warning'
+                                            }`}>
+                                            {conn.health || '-'}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        {conn.last_checked_at ? new Date(conn.last_checked_at).toLocaleString() : '-'}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex justify-end gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setSelectedConn(conn)
+                                                    setIsViewOpen(true)
+                                                }}
+                                                title="View Details"
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setSelectedConn(conn)
+                                                    setIsEditOpen(true)
+                                                }}
+                                                title="Edit"
+                                            >
+                                                <Edit className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleDeleteClick(conn)}
+                                                title="Delete"
+                                                className="text-error hover:text-error hover:bg-error/10"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                </Table>
+            </Card>
+
+            <ConnectionModal
+                isOpen={isAddOpen}
+                onClose={() => setIsAddOpen(false)}
+                onUpdate={loadConnections}
+            />
+
+            <ConnectionModal
+                isOpen={isEditOpen}
+                onClose={() => { setIsEditOpen(false); setSelectedConn(null) }}
+                connection={selectedConn}
+                onUpdate={loadConnections}
+            />
+
+            <ViewConnectionModal
+                isOpen={isViewOpen}
+                onClose={() => { setIsViewOpen(false); setSelectedConn(null) }}
+                connection={selectedConn}
+            />
+
+            <DeleteConfirmationModal
+                isOpen={deleteModalOpen}
+                onClose={() => { if (!isDeleting) setDeleteModalOpen(false) }}
+                onConfirm={handleConfirmDelete}
+                connectionName={connToDelete?.name}
+                isLoading={isDeleting}
+            />
+        </div>
+    )
+}

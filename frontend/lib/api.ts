@@ -39,10 +39,17 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      Cookies.remove('auth_token')
-      Cookies.remove('user')
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login'
+      // Don't redirect if we're already on login page (to handle OTP flow)
+      // or if it's the specific OTP required error
+      const isOtpError = error.response.data?.detail?.includes('OTP')
+      const isLoginPage = typeof window !== 'undefined' && window.location.pathname === '/login'
+
+      if (!isOtpError && !isLoginPage) {
+        Cookies.remove('auth_token')
+        Cookies.remove('user')
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login'
+        }
       }
     }
 
@@ -77,8 +84,8 @@ export default api
 
 // Auth API
 export const authAPI = {
-  login: async (identifier: string, password: string) => {
-    const response = await api.post('/auth/login', { identifier, password })
+  login: async (identifier: string, password: string, otp?: string) => {
+    const response = await api.post('/auth/login', { identifier, password, otp })
     return response.data
   },
   logout: async () => {
@@ -88,6 +95,14 @@ export const authAPI = {
   },
   forgotPassword: async (email: string) => {
     const response = await api.post('/auth/forgot-password', { email })
+    return response.data
+  },
+  resetPassword: async (identifier: string, otp: string, newPassword: string) => {
+    const response = await api.post('/auth/reset-password', {
+      identifier,
+      otp,
+      new_password: newPassword
+    })
     return response.data
   },
   refreshToken: async () => {
@@ -168,6 +183,10 @@ export const userAPI = {
     const response = await api.post('/users/me/ping')
     return response.data
   },
+  disconnectTelegram: async () => {
+    const response = await api.delete('/telegram/disconnect')
+    return response.data
+  },
 }
 
 // Admin API
@@ -200,6 +219,15 @@ export const adminAPI = {
   updateUserStatus: async (id: string, status: string, reason?: string) => {
     const response = await api.patch(`/admin/users/${id}/status`, { status, reason })
     return response.data
+  },
+  sendMessage: (userId: string, message: string) => {
+    const response = api.post(`/admin/users/${userId}/message`, { message })
+    return response.then(res => res.data)
+  },
+  getMessages: (userId: string, limit?: number) => {
+    const params = limit ? { limit } : {}
+    const response = api.get(`/admin/users/${userId}/messages`, { params })
+    return response.then(res => res.data)
   },
   toggleUserStatus: async (id: string) => {
     // Get current user first to check status, then toggle
@@ -346,7 +374,7 @@ export const symbolsAPI = {
       const data = response.data || {}
       const pagination = data.pagination || {}
       const logs = data.logs || []
-      
+
       console.log('[API] Upload logs response:', {
         status: response.status,
         has_data: !!data,

@@ -34,7 +34,7 @@
     {
       "id": "symbols_duckdb_default",
       "name": "Default DuckDB Symbols",
-      "type": "duckdb_direct",
+      "type": "duckdb",
       "category": "symbols",
       "config": {
         "path": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\symbols\\symbols.duckdb"
