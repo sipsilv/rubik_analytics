@@ -1,38 +1,48 @@
 @echo off
+REM Rubik Analytics - Stop Docker (Robust)
 setlocal enabledelayedexpansion
-
-echo ========================================
-echo Rubik Analytics - Stop Docker
-echo ========================================
-echo.
 
 cd /d "%~dp0"
 
-:: Check Docker Compose
-set DOCKER_CMD=
-docker compose version >nul 2>&1
-if !errorlevel! equ 0 (
-    set DOCKER_CMD=docker compose
+echo ===========================================
+echo   Rubik Analytics - Docker Stop
+echo ===========================================
+echo.
+
+REM 1. Autodetect Data Directory (needed for compose file variable resolution)
+set "SCRIPT_DIR=%~dp0"
+cd /d "%SCRIPT_DIR%..\.."
+set "PROJECT_ROOT=%CD%"
+set "DATA_DIR=%PROJECT_ROOT%\data"
+set "HOST_DATA_DIR=%DATA_DIR%"
+
+cd /d "%SCRIPT_DIR%"
+
+REM 2. Check Docker Compose
+docker-compose version >nul 2>&1
+if %errorlevel% equ 0 (
+    set COMPOSE_CMD=docker-compose
 ) else (
-    docker-compose --version >nul 2>&1
-    if !errorlevel! equ 0 (
-        set DOCKER_CMD=docker-compose
+    docker compose version >nul 2>&1
+    if %errorlevel% equ 0 (
+        set COMPOSE_CMD=docker compose
     ) else (
-        echo [ERROR] Docker Compose not found!
+        echo [ERROR] docker-compose not found.
         pause
         exit /b 1
     )
 )
 
-echo [INFO] Stopping containers...
-%DOCKER_CMD% down
+REM 3. Stop
+echo [INFO] Stopping services...
+%COMPOSE_CMD% down
 
 if %errorlevel% equ 0 (
     echo.
-    echo [SUCCESS] Containers stopped.
+    echo [OK] All services stopped.
 ) else (
     echo.
-    echo [WARNING] Some containers may not have stopped.
+    echo [ERROR] Failed to stop services.
 )
 
 echo.
