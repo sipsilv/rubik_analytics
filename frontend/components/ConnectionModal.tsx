@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
-import { adminAPI } from '@/lib/api'
+import { adminAPI, telegramAPI } from '@/lib/api'
 import { getErrorMessage } from '@/lib/error-utils'
 import { X } from 'lucide-react'
 
@@ -53,6 +53,15 @@ export function ConnectionModal({ isOpen, onClose, connection, onUpdate }: Conne
     const [password, setPassword] = useState('')
     const [authUrl, setAuthUrl] = useState('https://auth.truedata.in/token')
     const [websocketPort, setWebsocketPort] = useState('8086')
+
+    // Telegram OTP State
+    const [phone, setPhone] = useState('')
+    const [otpCode, setOtpCode] = useState('')
+    const [twoFaPassword, setTwoFaPassword] = useState('')
+    const [phoneCodeHash, setPhoneCodeHash] = useState('')
+    const [isOtpSent, setIsOtpSent] = useState(false)
+    const [isVerified, setIsVerified] = useState(false)
+    const [sessionString, setSessionString] = useState('')
 
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
@@ -105,6 +114,12 @@ export function ConnectionModal({ isOpen, onClose, connection, onUpdate }: Conne
                 setBaseUrl(connection.details?.session_path || '')
                 // api_hash is masked, don't populate - user must re-enter to update
                 setApiSecret('')
+                setSessionString(connection.details?.session_string || '')
+                setPhone(connection.details?.phone || '')
+                // If session string exists, assume verified
+                if (connection.details?.session_string) {
+                    setIsVerified(true)
+                }
             } else {
                 setAuthType('API_KEY')
                 // For generic connections, don't populate secrets
@@ -135,6 +150,13 @@ export function ConnectionModal({ isOpen, onClose, connection, onUpdate }: Conne
         setPassword('')
         setAuthUrl('https://auth.truedata.in/token')
         setWebsocketPort('8086')
+        setPhone('')
+        setOtpCode('')
+        setTwoFaPassword('')
+        setPhoneCodeHash('')
+        setIsOtpSent(false)
+        setIsVerified(false)
+        setSessionString('')
         setError('')
     }
 
@@ -142,7 +164,53 @@ export function ConnectionModal({ isOpen, onClose, connection, onUpdate }: Conne
 
     const handleClose = () => {
         setIsVisible(false)
+        // Reset OTP state on close
+        setTimeout(() => {
+            setIsOtpSent(false)
+            setIsVerified(false)
+            setPhoneCodeHash('')
+            setOtpCode('')
+        }, 300)
         onClose()
+    }
+
+    const handleRequestOtp = async () => {
+        if (!apiKey || !apiSecret || !phone) {
+            setError('Please enter API ID, API Hash, and Phone Number first')
+            return
+        }
+        setLoading(true)
+        setError('')
+        try {
+            const res = await telegramAPI.requestOtp(apiKey, apiSecret, phone)
+            setPhoneCodeHash(res.phone_code_hash)
+            setSessionString(res.session_string) // Store temp session string
+            setIsOtpSent(true)
+            setError('')
+        } catch (err: any) {
+            setError(getErrorMessage(err, 'Failed to send OTP'))
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleVerifyOtp = async () => {
+        if (!otpCode || !phoneCodeHash || !sessionString) {
+            setError('Missing session data. Please Request OTP again.')
+            return
+        }
+        setLoading(true)
+        setError('')
+        try {
+            const res = await telegramAPI.verifyOtp(apiKey, apiSecret, phone, otpCode, phoneCodeHash, sessionString, twoFaPassword)
+            setSessionString(res.session_string)
+            setIsVerified(true)
+            setError('')
+        } catch (err: any) {
+            setError(getErrorMessage(err, 'Verification failed'))
+        } finally {
+            setLoading(false)
+        }
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -194,6 +262,13 @@ export function ConnectionModal({ isOpen, onClose, connection, onUpdate }: Conne
                 if (apiSecret && apiSecret.trim()) {
                     details.api_hash = apiSecret.trim()
                 }
+                if (sessionString) {
+                    details.session_string = sessionString
+                }
+                if (phone && phone.trim()) {
+                    details.phone = phone.trim()
+                }
+                // If we have a session path (legacy) keep it, but session_string is preferred
                 if (baseUrl && baseUrl.trim()) {
                     details.session_path = baseUrl.trim()
                 }
@@ -460,11 +535,59 @@ export function ConnectionModal({ isOpen, onClose, connection, onUpdate }: Conne
                                         />
 
                                         <Input
-                                            label="Session File Path"
-                                            value={baseUrl}
-                                            onChange={(e) => setBaseUrl(e.target.value)}
-                                            placeholder="e.g. mysession.session (relative to connections dir) or absolute path"
+                                            label="Phone Number"
+                                            value={phone}
+                                            onChange={(e) => setPhone(e.target.value)}
+                                            placeholder="+919876543210"
+                                            disabled={isVerified}
                                         />
+
+                                        {!isVerified && !isOtpSent && (
+                                            <div className="flex justify-end">
+                                                <Button
+                                                    type="button"
+                                                    variant="secondary"
+                                                    onClick={handleRequestOtp}
+                                                    disabled={loading || !apiKey || !apiSecret || !phone}
+                                                >
+                                                    Request OTP
+                                                </Button>
+                                            </div>
+                                        )}
+
+                                        {isOtpSent && !isVerified && (
+                                            <div className="space-y-4 p-4 border border-[#1f2a44] rounded bg-[#1f2a44]/30">
+                                                <div className="text-sm text-green-400">OTP Sent! Please enter the code from Telegram.</div>
+                                                <Input
+                                                    label="OTP Code"
+                                                    value={otpCode}
+                                                    onChange={(e) => setOtpCode(e.target.value)}
+                                                    placeholder="12345"
+                                                />
+                                                <Input
+                                                    label="2FA Password (Optional)"
+                                                    value={twoFaPassword}
+                                                    onChange={(e) => setTwoFaPassword(e.target.value)}
+                                                    type="password"
+                                                    placeholder="Only if enabled"
+                                                />
+                                                <div className="flex justify-end">
+                                                    <Button
+                                                        type="button"
+                                                        onClick={handleVerifyOtp}
+                                                        disabled={loading || !otpCode}
+                                                    >
+                                                        Verify & Connect
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {isVerified && (
+                                            <div className="p-2 text-green-400 bg-green-400/10 border border-green-400/20 rounded text-sm text-center">
+                                                ✅ Verified & Connected
+                                            </div>
+                                        )}
                                     </>
                                 ) : (
                                     <>

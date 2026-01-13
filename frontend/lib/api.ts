@@ -347,6 +347,30 @@ export const adminAPI = {
 
 
 
+// Telegram API
+export const telegramAPI = {
+  requestOtp: async (apiId: string, apiHash: string, phone: string) => {
+    const response = await api.post('/telegram/request-otp', {
+      api_id: parseInt(apiId),
+      api_hash: apiHash,
+      phone
+    })
+    return response.data
+  },
+  verifyOtp: async (apiId: string, apiHash: string, phone: string, code: string, phoneCodeHash: string, sessionString: string, password?: string) => {
+    const response = await api.post('/telegram/verify-otp', {
+      api_id: parseInt(apiId),
+      api_hash: apiHash,
+      phone,
+      code,
+      phone_code_hash: phoneCodeHash,
+      session_string: sessionString,
+      password
+    })
+    return response.data
+  }
+}
+
 // Symbols API
 export const symbolsAPI = {
   getStats: async () => {

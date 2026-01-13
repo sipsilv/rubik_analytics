@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { adminAPI } from '@/lib/api'
-import { Settings, RefreshCw, Power, PowerOff } from 'lucide-react'
+import { Settings, Power, PowerOff } from 'lucide-react'
+import { RefreshButton } from '@/components/ui/RefreshButton'
 
 interface TrueDataConnectionCardProps {
   connection: any
@@ -35,7 +36,7 @@ export function TrueDataConnectionCard({ connection, onConfigure, onViewDetails,
         second: '2-digit',
         hour12: false
       })
-      
+
       const parts = formatter.formatToParts(date)
       const day = parts.find(p => p.type === 'day')?.value.padStart(2, '0') || '00'
       const month = parts.find(p => p.type === 'month')?.value || 'Jan'
@@ -43,7 +44,7 @@ export function TrueDataConnectionCard({ connection, onConfigure, onViewDetails,
       const hours = parts.find(p => p.type === 'hour')?.value.padStart(2, '0') || '00'
       const minutes = parts.find(p => p.type === 'minute')?.value.padStart(2, '0') || '00'
       const seconds = parts.find(p => p.type === 'second')?.value.padStart(2, '0') || '00'
-      
+
       return `${day} ${month} ${year}, ${hours}:${minutes}:${seconds} IST`
     } catch (e) {
       try {
@@ -64,7 +65,7 @@ export function TrueDataConnectionCard({ connection, onConfigure, onViewDetails,
   // Load token status
   const loadTokenStatus = async () => {
     if (!connection?.id) return
-    
+
     try {
       const response = await adminAPI.getTokenStatus(String(connection.id))
       if (response.token_status) {
@@ -108,13 +109,13 @@ export function TrueDataConnectionCard({ connection, onConfigure, onViewDetails,
     const updateCountdown = () => {
       try {
         const currentTokenInfo = tokenInfoRef.current
-        
+
         if (!currentTokenInfo || currentTokenInfo.seconds_left === undefined || currentTokenInfo.seconds_left === null) {
           setCountdown('--:--:--')
           setCountdownColor('green')
           return
         }
-        
+
         // If backend provided new seconds_left (from polling), reset to authoritative value
         if (currentTokenInfo.seconds_left !== lastBackendSeconds) {
           currentSeconds = Math.max(0, Number(currentTokenInfo.seconds_left) || 0)
@@ -156,7 +157,7 @@ export function TrueDataConnectionCard({ connection, onConfigure, onViewDetails,
 
     // Update immediately
     updateCountdown()
-    
+
     // Update every second (decrement timer)
     const interval = setInterval(updateCountdown, 1000)
 
@@ -172,7 +173,7 @@ export function TrueDataConnectionCard({ connection, onConfigure, onViewDetails,
 
   const handleToggle = async () => {
     if (!connection?.id) return
-    
+
     setLoading(true)
     try {
       await adminAPI.toggleConnection(String(connection.id))
@@ -187,7 +188,7 @@ export function TrueDataConnectionCard({ connection, onConfigure, onViewDetails,
 
   const handleRefreshToken = async () => {
     if (!connection?.id) return
-    
+
     setLoading(true)
     try {
       await adminAPI.refreshToken(String(connection.id))
@@ -259,28 +260,26 @@ export function TrueDataConnectionCard({ connection, onConfigure, onViewDetails,
               {getTokenStatusText()}
             </span>
           </div>
-          
+
           {tokenInfo && (
             <div className="space-y-3">
               {/* Timer */}
               <div className="flex items-center justify-between">
                 <span className="text-xs text-text-secondary">Expires In</span>
                 <div className="flex items-center gap-2">
-                  <span className={`text-xl font-mono font-bold tracking-wider ${
-                    countdownColor === 'red' ? 'text-error' :
-                    countdownColor === 'orange' ? 'text-warning' :
-                    'text-success'
-                  }`}>
+                  <span className={`text-xl font-mono font-bold tracking-wider ${countdownColor === 'red' ? 'text-error' :
+                      countdownColor === 'orange' ? 'text-warning' :
+                        'text-success'
+                    }`}>
                     {countdown}
                   </span>
-                  <div className={`w-2.5 h-2.5 rounded-full ${
-                    countdownColor === 'red' ? 'bg-error animate-pulse' :
-                    countdownColor === 'orange' ? 'bg-warning' :
-                    'bg-success'
-                  }`}></div>
+                  <div className={`w-2.5 h-2.5 rounded-full ${countdownColor === 'red' ? 'bg-error animate-pulse' :
+                      countdownColor === 'orange' ? 'bg-warning' :
+                        'bg-success'
+                    }`}></div>
                 </div>
               </div>
-              
+
               {/* Next Auto Refresh */}
               {tokenInfo.next_auto_refresh_at && (
                 <div className="flex items-center justify-between pt-2 border-t border-[#1f2a44]">
@@ -290,7 +289,7 @@ export function TrueDataConnectionCard({ connection, onConfigure, onViewDetails,
                   </span>
                 </div>
               )}
-              
+
               {/* Last Refreshed */}
               {tokenInfo.last_refreshed_at && (
                 <div className="flex items-center justify-between">
@@ -315,18 +314,17 @@ export function TrueDataConnectionCard({ connection, onConfigure, onViewDetails,
             <Settings className="w-4 h-4 mr-1" />
             Settings
           </Button>
-          
-          <Button
+
+          <RefreshButton
             variant="secondary"
             size="sm"
             onClick={handleRefreshToken}
             disabled={loading || !connection?.is_enabled}
             className="flex-1"
           >
-            <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
             Refresh Token
-          </Button>
-          
+          </RefreshButton>
+
           <Button
             variant={connection?.is_enabled ? "secondary" : "primary"}
             size="sm"

@@ -6,7 +6,9 @@ import { adminAPI } from '@/lib/api'
 import { Card } from '@/components/ui/Card'
 import { Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
-import { ArrowLeft, RefreshCw, Settings, Trash2, Search, Plus, Eye, Edit } from 'lucide-react'
+import { RefreshButton } from '@/components/ui/RefreshButton'
+import { ArrowLeft, Settings, Trash2, Search, Plus, Eye, Edit } from 'lucide-react'
+import { Switch } from '@/components/ui/Switch'
 import { ConnectionModal } from '@/components/ConnectionModal'
 import { ViewConnectionModal } from '@/components/ViewConnectionModal'
 import { DeleteConfirmationModal } from '@/components/DeleteConfirmationModal'
@@ -18,6 +20,28 @@ export default function ConnectionListPage() {
 
     const [connections, setConnections] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+
+    // Format date helper
+    const formatDateTime = (dateString: string | null | undefined): string => {
+        if (!dateString) return '-'
+        try {
+            // Check if it's already a clean string or needs parsing
+            const date = new Date(dateString)
+            if (isNaN(date.getTime())) return dateString || '-'
+
+            return new Intl.DateTimeFormat('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            }).format(date)
+        } catch (e) {
+            return dateString || '-'
+        }
+    }
 
     // Modals
     const [selectedConn, setSelectedConn] = useState<any>(null)
@@ -81,6 +105,16 @@ export default function ConnectionListPage() {
         // Deprecated - kept for reference if needed, but replaced by handleDeleteClick flow
     }
 
+    const handleToggle = async (id: string) => {
+        try {
+            await adminAPI.toggleConnection(id)
+            loadConnections()
+        } catch (e) {
+            console.error('Error toggling connection:', e)
+            alert('Failed to toggle connection status')
+        }
+    }
+
     const getCategoryLabel = (key: string | null) => {
         if (!key) return 'All Connections'
         const labels: Record<string, string> = {
@@ -117,15 +151,14 @@ export default function ConnectionListPage() {
             <div className="flex items-center justify-between">
                 <div></div>
                 <div className="flex gap-2">
-                    <Button
+                    <RefreshButton
                         variant="secondary"
                         onClick={loadConnections}
                         size="sm"
                         disabled={loading}
                     >
-                        <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
                         Refresh
-                    </Button>
+                    </RefreshButton>
                     <Button
                         onClick={() => setIsAddOpen(true)}
                         size="sm"
@@ -142,9 +175,9 @@ export default function ConnectionListPage() {
                         <TableHeaderCell>Name</TableHeaderCell>
                         <TableHeaderCell>Provider</TableHeaderCell>
                         <TableHeaderCell>Type</TableHeaderCell>
+                        <TableHeaderCell>Enabled</TableHeaderCell>
                         <TableHeaderCell>Status</TableHeaderCell>
                         <TableHeaderCell>Health</TableHeaderCell>
-                        <TableHeaderCell>Last Checked</TableHeaderCell>
                         <TableHeaderCell className="text-right">Actions</TableHeaderCell>
                     </TableHeader>
                     <TableBody>
@@ -173,6 +206,14 @@ export default function ConnectionListPage() {
                                         </span>
                                     </TableCell>
                                     <TableCell>
+                                        <div onClick={(e) => e.stopPropagation()}>
+                                            <Switch
+                                                checked={conn.is_enabled}
+                                                onCheckedChange={() => handleToggle(conn.id)}
+                                            />
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
                                         <span className={`text-xs px-2 py-1 rounded-full font-bold ${conn.status === 'CONNECTED' ? 'bg-success/10 text-success' :
                                             conn.status === 'ERROR' ? 'bg-error/10 text-error' :
                                                 'bg-warning/10 text-warning'
@@ -187,9 +228,6 @@ export default function ConnectionListPage() {
                                             }`}>
                                             {conn.health || '-'}
                                         </span>
-                                    </TableCell>
-                                    <TableCell>
-                                        {conn.last_checked_at ? new Date(conn.last_checked_at).toLocaleString() : '-'}
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex justify-end gap-2">

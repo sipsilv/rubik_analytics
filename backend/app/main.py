@@ -7,7 +7,7 @@ import sys
 
 # Configure logging to suppress ONLY WebSocket access logs
 # Keep all other normal logs (HTTP requests, application logs, etc.)
-from app.api.v1 import auth, users, admin, connections, websocket, symbols, screener, announcements
+from app.api.v1 import auth, users, admin, connections, websocket, symbols, screener, announcements, telegram_auth
 from app.core.config import settings
 from app.core.database import get_connection_manager, get_db_router
 
@@ -533,9 +533,10 @@ app.include_router(symbols.router, prefix="/api/v1/admin/symbols", tags=["symbol
 app.include_router(screener.router, prefix="/api/v1/admin/screener", tags=["screener"])
 app.include_router(announcements.router, prefix="/api/v1/announcements", tags=["announcements"])
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
-from app.api.v1 import telegram, telegram_connect
+from app.api.v1 import telegram, telegram_connect, telegram_auth
 app.include_router(telegram.router, prefix="/api/v1/telegram", tags=["telegram"])
 app.include_router(telegram_connect.router, prefix="/api/v1/telegram", tags=["telegram_connect"])
+app.include_router(telegram_auth.router, prefix="/api/v1/telegram", tags=["telegram_auth"])
 
 @app.get("/health")
 async def health_check():

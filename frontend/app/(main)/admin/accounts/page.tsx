@@ -43,6 +43,34 @@ export default function AccountsPage() {
   const [errorModal, setErrorModal] = useState({ isOpen: false, message: '' })
   const isSuperAdmin = currentUser?.role === 'super_admin'
 
+  // Format date helper
+  const formatDateTime = (dateString: string | null | undefined): string => {
+    if (!dateString) return '-'
+    try {
+      // Handle Python naive UTC strings by appending Z if missing
+      // This ensures browser treats it as UTC, not local
+      const normalizedString = (!dateString.endsWith('Z') && !dateString.includes('+'))
+        ? dateString + 'Z'
+        : dateString
+
+      const date = new Date(normalizedString)
+      if (isNaN(date.getTime())) return dateString || '-'
+
+      return new Intl.DateTimeFormat('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Kolkata' // Explicitly force IST
+      }).format(date)
+    } catch (e) {
+      return dateString || '-'
+    }
+  }
+
   // WebSocket connection for real-time status updates
   const handleStatusUpdate = (update: UserStatusUpdate) => {
     console.log('[Accounts] Status update received:', update)
@@ -384,6 +412,7 @@ export default function AccountsPage() {
               <TableHeaderCell>Role</TableHeaderCell>
               <TableHeaderCell>Status</TableHeaderCell>
               <TableHeaderCell>Live</TableHeaderCell>
+              <TableHeaderCell>Last Seen</TableHeaderCell>
               <TableHeaderCell className="text-center w-[80px]">Telegram</TableHeaderCell>
               <TableHeaderCell className="text-right">Actions</TableHeaderCell>
             </TableHeader>
@@ -428,6 +457,11 @@ export default function AccountsPage() {
                         : 'bg-text-muted/10 text-text-muted'
                         }`}>
                         {liveStatus || 'OFFLINE'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-mono text-xs text-text-secondary">
+                        {formatDateTime(user.last_active_at)}
                       </span>
                     </TableCell>
                     <TableCell>

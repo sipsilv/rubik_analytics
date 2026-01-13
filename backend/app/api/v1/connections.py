@@ -730,12 +730,20 @@ async def update_connection(
             elif provider_normalized in ["TELEGRAMUSER", "TELEGRAM_USER"]:
                  api_id = final_details.get("api_id")
                  api_hash = final_details.get("api_hash")
-                 if api_id and api_hash:
+                 session_string = final_details.get("session_string")
+
+                 if api_id and api_hash and session_string:
                       conn.status = ConnectionStatus.CONNECTED.value
                       conn.health = ConnectionHealth.HEALTHY.value
                       conn.last_checked_at = datetime.now(timezone.utc)
                       conn.last_success_at = datetime.now(timezone.utc)
                       conn.error_logs = None
+                 elif api_id and api_hash:
+                      # Configured but not logged in
+                      conn.status = ConnectionStatus.DISCONNECTED.value
+                      conn.health = ConnectionHealth.DOWN.value
+                      conn.last_checked_at = datetime.now(timezone.utc)
+                      conn.error_logs = json.dumps({"message": "Login Required: Please verify OTP"})
                  else:
                       conn.status = ConnectionStatus.ERROR.value
                       conn.health = ConnectionHealth.DOWN.value
@@ -1095,10 +1103,12 @@ async def test_connection(
                          message = f"Telegram User Connection Error: {str(e)}"
                 
                 elif api_id and api_hash:
-                     # Credentials present - mark as Connected (Configured) to satisfy UI
-                     # even if session is missing. This indicates "Ready to Login".
-                     is_connected = True
-                     message = "Telegram API Configured (Login required for full access)"
+                     # Credentials present but NO session string
+                     # Mark as CONNECTED but with a warning, OR DISCONNECTED/ERROR depending on user preference.
+                     # User request: "if doest ask [OTP] then say connected" - implies they want to know if it's NOT connected.
+                     # Strict check:
+                     is_connected = False
+                     message = "Disconnected: Login Required (OTP verification needed)"
                 else:
                      is_connected = False
                      message = "Missing API ID or Hash"
@@ -1702,3 +1712,86 @@ async def call_truedata_corporate_api(
     except Exception as e:
         logger.error(f"Error calling Corporate API {endpoint} for connection {id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to call API: {str(e)}")
+
+@router.post("/{id}/toggle", response_model=ConnectionResponse)
+async def toggle_connection(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user)
+):
+    """
+    Toggle connection enabled/disabled status
+    """
+    conn = db.query(Connection).filter(Connection.id == id).first()
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    
+    # Toggle status
+    conn.is_enabled = not conn.is_enabled
+    
+    # Log audit event
+    action = "ENABLE_CONNECTION" if conn.is_enabled else "DISABLE_CONNECTION"
+    log_audit_event(
+        db, 
+        current_user.id, 
+        action, 
+        "connections", 
+        str(conn.id), 
+        None, 
+        {"name": conn.name, "new_status": conn.is_enabled}
+    )
+    
+    db.commit()
+    
+    # Auto-verify if enabled (only for DB connections)
+    if conn.is_enabled:
+        try:
+            # Re-test connection to ensure validity
+            # We call the existing test_connection endpoint logic
+            await test_connection(id, db, current_user)
+        except Exception as e:
+            logger.error(f"Auto-verification failed for connection {id}: {e}")
+            # We don't fail the toggle, but the status will be updated by test_connection
+            
+    db.refresh(conn)
+    
+    return create_connection_response(conn)
+
+
+def create_connection_response(conn: Connection) -> ConnectionResponse:
+    """Helper to create ConnectionResponse from Connection model"""
+    # Extract URL and port from credentials for TrueData connections
+    url = None
+    port = None
+    provider_normalized = conn.provider.upper().replace(" ", "").replace("_", "").replace("-", "") if conn.provider else ""
+    
+    if provider_normalized == "TRUEDATA" and conn.credentials:
+        try:
+            decrypted_json = decrypt_data(conn.credentials)
+            config = json.loads(decrypted_json)
+            url = config.get("auth_url", settings.TRUEDATA_DEFAULT_AUTH_URL)
+            port = config.get("websocket_port", settings.TRUEDATA_DEFAULT_WEBSOCKET_PORT)
+        except Exception as e:
+            # logger.debug(f"Could not extract URL/port: {e}")
+            url = settings.TRUEDATA_DEFAULT_AUTH_URL
+            port = settings.TRUEDATA_DEFAULT_WEBSOCKET_PORT
+            
+    conn_dict = {
+        'id': conn.id,
+        'name': conn.name,
+        'connection_type': conn.connection_type,
+        'provider': conn.provider,
+        'description': conn.description,
+        'environment': conn.environment if conn.environment is not None else "PROD",
+        'status': conn.status if conn.status is not None else "DISCONNECTED",
+        'health': conn.health if conn.health is not None else "HEALTHY",
+        'is_enabled': conn.is_enabled if conn.is_enabled is not None else False,
+        'last_checked_at': conn.last_checked_at,
+        'last_success_at': conn.last_success_at,
+        'created_at': conn.created_at if conn.created_at is not None else datetime.now(timezone.utc),
+        'updated_at': conn.updated_at,
+        'url': url,
+        'port': port
+    }
+    
+    return ConnectionResponse.model_validate(conn_dict)
