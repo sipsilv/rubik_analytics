@@ -14,7 +14,7 @@ export function StatusPopup({ isOpen, onClose, channel }: StatusPopupProps) {
     if (!channel) return null
 
     const stats = [
-        { label: 'Messages Fetched', value: 0, icon: Activity, color: 'text-primary' },
+        { label: 'Messages Fetched', value: channel.today_count || 0, icon: Activity, color: 'text-primary' },
         { label: 'Messages Parsed', value: 0, icon: CheckCircle, color: 'text-success' },
         { label: 'Pending AI', value: 0, icon: Clock, color: 'text-warning' },
         { label: 'Failed', value: 0, icon: AlertCircle, color: 'text-error' },

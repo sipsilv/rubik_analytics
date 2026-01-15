@@ -10,9 +10,9 @@ class Settings(BaseSettings):
     PROJECT_ROOT: str = os.path.dirname(BASE_DIR)
 
     # Data directory - reads from DATA_DIR environment variable, falls back to default relative path
-    # If running in Docker, DATA_DIR should be set to /app/data
-    # If running locally, it defaults to ../data relative to backend
-    DATA_DIR: str = os.getenv("DATA_DIR", os.path.join(PROJECT_ROOT, "data"))
+    # Normalize and strip to handle both mixed path separators and trailing whitespace
+    # This is critical on Windows where batch scripts can introduce trailing spaces
+    DATA_DIR: str = os.path.normpath(os.getenv("DATA_DIR", os.path.join(PROJECT_ROOT, "data")).strip())
     
     # Database (legacy - now using connection manager)
     DATABASE_URL: str = f"sqlite:///{os.path.join(DATA_DIR, 'auth/sqlite/auth.db')}"

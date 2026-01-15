@@ -145,6 +145,7 @@ export default function ConnectionsPage() {
     { key: 'NEWS' as const, ...categoryStats.NEWS },
     { key: 'SOCIAL' as const, ...categoryStats.SOCIAL },
     { key: 'MARKET_DATA' as const, ...categoryStats.MARKET_DATA },
+    { key: 'AI_ML' as const, ...categoryStats.AI_ML },
     trueDataCategory,
   ]
 
@@ -238,6 +239,8 @@ export default function ConnectionsPage() {
                   {category.key === 'BROKER' && 'Configure trading platforms and broker API integrations for automated trading.'}
                   {category.key === 'NEWS' && 'Connect to news feeds and event data sources for market analysis.'}
                   {category.key === 'SOCIAL' && 'Integrate with messaging platforms and social media for sentiment analysis.'}
+                  {category.key === 'MARKET_DATA' && 'Real-time market data providers.'}
+                  {category.key === 'AI_ML' && 'Configure AI and machine learning model endpoints (Ollama, Gemini, Perplexity).'}
                   {category.key === 'TRUEDATA' && 'Configure TrueData as a central token provider. Tokens are generated and refreshed automatically.'}
                 </p>
                 {category.key === 'TRUEDATA' ? (

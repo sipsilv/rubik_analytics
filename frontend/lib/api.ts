@@ -295,6 +295,18 @@ export const adminAPI = {
     const response = await api.post(`/admin/connections/${id}/test`)
     return response.data
   },
+  getAiModels: async (provider: string, baseUrl?: string) => {
+    const params: any = { provider }
+    if (baseUrl) params.base_url = baseUrl
+    const response = await api.get('/admin/connections/ai/models', { params })
+    return response.data
+  },
+  getProcessorData: async (type: string) => {
+    // Assuming `api` is the correct client to use, similar to other methods.
+    // The path `/processors/data/${type}` is inferred from the `getProcessorStats` method's path `/processors/stats`.
+    const response = await api.get(`/processors/data/${type}`)
+    return response.data
+  },
   toggleConnection: async (id: string) => {
     const response = await api.post(`/admin/connections/${id}/toggle`)
     return response.data
@@ -341,6 +353,10 @@ export const adminAPI = {
   },
   updateFeatureRequest: async (id: string, data: { status?: string; admin_note?: string }) => {
     const response = await api.put(`/admin/feature-requests/${id}`, data)
+    return response.data
+  },
+  getProcessorStats: async () => {
+    const response = await api.get('/processors/stats')
     return response.data
   },
 }

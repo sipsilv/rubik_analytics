@@ -176,6 +176,11 @@ def init_symbols_database():
                         metadata = conn.execute("SELECT csv_last_modified, last_loaded_at FROM series_lookup_metadata WHERE id = 1").fetchone()
                         if metadata:
                             last_csv_mtime = metadata[0] if metadata[0] else None
+                            
+                            # Ensure last_csv_mtime is timezone-aware for comparison
+                            if last_csv_mtime and last_csv_mtime.tzinfo is None:
+                                last_csv_mtime = last_csv_mtime.replace(tzinfo=timezone.utc)
+                                
                             if last_csv_mtime is None:
                                 should_reload = True
                                 logger.info(f"No CSV modification time in metadata, reloading from: {csv_path}")
@@ -258,7 +263,12 @@ def reload_series_lookup(force: bool = False):
             else:
                 try:
                     metadata = conn.execute("SELECT csv_last_modified FROM series_lookup_metadata WHERE id = 1").fetchone()
-                    if not metadata or not metadata[0] or csv_mtime_dt > metadata[0]:
+                    
+                    last_csv_mtime = metadata[0] if metadata and metadata[0] else None
+                    if last_csv_mtime and last_csv_mtime.tzinfo is None:
+                        last_csv_mtime = last_csv_mtime.replace(tzinfo=timezone.utc)
+                        
+                    if last_csv_mtime is None or csv_mtime_dt > last_csv_mtime:
                         should_reload = True
                 except:
                     should_reload = True

@@ -171,9 +171,8 @@ set "TRUEDATA_DEFAULT_AUTH_URL=https://auth.truedata.in/token"
 set "TRUEDATA_DEFAULT_WEBSOCKET_PORT=8086"
 REM -----------------------------------------------------------------------------
 
-REM Start backend server directly
-REM Note: WebSocket connection logs are filtered in main.py, but HTTP access logs are kept
-start "Rubik Backend" cmd /k "cd /d "%BACKEND_DIR%" && call venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000 --env-file .env"
+REM Start backend server ( Integrated with Workers )
+start "Rubik Backend" cmd /k "%~dp0run-integrated-backend.bat"
 
 timeout /t 5 /nobreak >nul
 
@@ -191,6 +190,8 @@ if not exist "%FRONTEND_DIR%\node_modules" (
 
 REM Start frontend server directly
 start "Rubik Frontend" cmd /k "cd /d "%FRONTEND_DIR%" && npm run dev"
+
+timeout /t 3 /nobreak >nul
 
 timeout /t 3 /nobreak >nul
 

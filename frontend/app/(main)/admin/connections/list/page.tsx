@@ -7,12 +7,13 @@ import { Card } from '@/components/ui/Card'
 import { Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { RefreshButton } from '@/components/ui/RefreshButton'
-import { ArrowLeft, Settings, Trash2, Search, Plus, Eye, Edit } from 'lucide-react'
+import { ArrowLeft, Settings, Trash2, Search, Plus, Eye, Edit, Sparkles } from 'lucide-react'
 import { Switch } from '@/components/ui/Switch'
 import { SmartTooltip } from '@/components/ui/SmartTooltip'
 import { ConnectionModal } from '@/components/ConnectionModal'
 import { ViewConnectionModal } from '@/components/ViewConnectionModal'
 import { DeleteConfirmationModal } from '@/components/DeleteConfirmationModal'
+import { AIConfigModal } from '@/components/AIConfigModal'
 
 function ConnectionListContent() {
     const router = useRouter()
@@ -48,6 +49,7 @@ function ConnectionListContent() {
     const [selectedConn, setSelectedConn] = useState<any>(null)
     const [isAddOpen, setIsAddOpen] = useState(false)
     const [isEditOpen, setIsEditOpen] = useState(false)
+    const [isAIConfigOpen, setIsAIConfigOpen] = useState(false)
     const [isViewOpen, setIsViewOpen] = useState(false)
 
     // Delete Confirmation
@@ -226,12 +228,19 @@ function ConnectionListContent() {
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <span className={`text-xs px-2 py-1 rounded-full font-bold ${conn.status === 'CONNECTED' ? 'bg-success/10 text-success' :
-                                            conn.status === 'ERROR' ? 'bg-error/10 text-error' :
-                                                'bg-warning/10 text-warning'
-                                            }`}>
-                                            {conn.status}
-                                        </span>
+                                        <div className="flex flex-col gap-1 items-start">
+                                            <span className={`text-xs px-2 py-1 rounded-full font-bold ${conn.status === 'CONNECTED' ? 'bg-success/10 text-success' :
+                                                conn.status === 'ERROR' ? 'bg-error/10 text-error' :
+                                                    'bg-warning/10 text-warning'
+                                                }`}>
+                                                {conn.status}
+                                            </span>
+                                            {conn.connection_type === 'AI_ML' && conn.details?.is_active && (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                                    ACTIVE MODEL
+                                                </span>
+                                            )}
+                                        </div>
                                     </TableCell>
                                     <TableCell>
                                         <span className={`text-xs ${conn.health === 'HEALTHY' ? 'text-success' :
@@ -256,6 +265,7 @@ function ConnectionListContent() {
                                                     <Eye className="w-4 h-4 btn-icon-hover icon-button icon-button-bounce" />
                                                 </Button>
                                             </SmartTooltip>
+
                                             {conn.connection_type === 'TELEGRAM_USER' && (
                                                 <SmartTooltip text="Channel Settings">
                                                     <Button
@@ -268,6 +278,24 @@ function ConnectionListContent() {
                                                     </Button>
                                                 </SmartTooltip>
                                             )}
+
+                                            {/* AI Config Button (Explicit as requested) */}
+                                            {conn.connection_type === 'AI_ML' && (
+                                                <SmartTooltip text="Configure AI Model">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setSelectedConn(conn)
+                                                            setIsAIConfigOpen(true)
+                                                        }}
+                                                        className="p-1.5 text-purple-400 hover:text-purple-300 hover:bg-purple-400/10"
+                                                    >
+                                                        <Sparkles className="w-4 h-4 btn-icon-hover icon-button icon-button-bounce" />
+                                                    </Button>
+                                                </SmartTooltip>
+                                            )}
+
                                             <SmartTooltip text="Edit">
 
                                                 <Button
@@ -300,6 +328,14 @@ function ConnectionListContent() {
                     </TableBody>
                 </Table>
             </Card>
+
+
+            <AIConfigModal
+                isOpen={isAIConfigOpen}
+                onClose={() => { setIsAIConfigOpen(false); setSelectedConn(null) }}
+                connection={selectedConn}
+                onUpdate={loadConnections}
+            />
 
             <ConnectionModal
                 isOpen={isAddOpen}

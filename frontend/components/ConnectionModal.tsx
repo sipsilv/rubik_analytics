@@ -129,6 +129,38 @@ export function ConnectionModal({ isOpen, onClose, connection, onUpdate, categor
                 if (connection.details?.session_string) {
                     setIsVerified(true)
                 }
+                if (connection.details?.session_string) {
+                    setIsVerified(true)
+                }
+            } else if (connection.connection_type === 'AI_ML') {
+                setApiKey('') // Masked
+                setBaseUrl(connection.details?.base_url || '')
+
+                // Determine if model is standard or custom
+                const savedModel = connection.details?.model_name || ''
+                const existingDetails = { ...connection.details }
+
+                // Standard lists (flattened for check)
+                const standardModels = [
+                    'llama3', 'llama3:70b', 'llama2', 'mistral', 'mixtral', 'gemma', 'phi3', // Ollama
+                    'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro', // Gemini
+                    'llama-3.1-sonar-small-128k-online', 'llama-3.1-sonar-large-128k-online', 'llama-3.1-sonar-huge-128k-online', // Perplexity
+                    'llama-3.1-sonar-small-128k-chat', 'llama-3.1-sonar-large-128k-chat'
+                ]
+
+                if (savedModel && !standardModels.includes(savedModel)) {
+                    // It's a custom model
+                    existingDetails.model_name = 'custom'
+                    existingDetails.custom_model_name = savedModel
+                } else {
+                    existingDetails.model_name = savedModel
+                }
+
+                // Update formData details immediately so select renders correctly
+                setFormData(prev => ({
+                    ...prev,
+                    details: existingDetails
+                }))
             } else {
                 setAuthType('API_KEY')
                 // For generic connections, don't populate secrets
@@ -280,6 +312,28 @@ export function ConnectionModal({ isOpen, onClose, connection, onUpdate, categor
                 // If we have a session path (legacy) keep it, but session_string is preferred
                 if (baseUrl && baseUrl.trim()) {
                     details.session_path = baseUrl.trim()
+                }
+                if (baseUrl && baseUrl.trim()) {
+                    details.session_path = baseUrl.trim()
+                }
+            } else if (formData.connection_type === 'AI_ML') {
+                // AI Connections
+                if (apiKey && apiKey.trim()) {
+                    details.api_key = apiKey.trim()
+                }
+                if (baseUrl && baseUrl.trim()) {
+                    details.base_url = baseUrl.trim()
+                }
+
+                // Handle Model Name Selection
+                let model = formData.details?.model_name
+                // If user selected 'custom', grab the value from custom_model_name
+                if (model === 'custom' && formData.details?.custom_model_name) {
+                    model = formData.details.custom_model_name
+                }
+
+                if (model) {
+                    details.model_name = model
                 }
             } else {
                 // Standard API key authentication
@@ -598,6 +652,106 @@ export function ConnectionModal({ isOpen, onClose, connection, onUpdate, categor
                                             </div>
                                         )}
                                     </>
+                                ) : formData.connection_type === 'AI_ML' ? (
+                                    <>
+                                        {/* AI/ML Specific Fields */}
+                                        <Input
+                                            label="Base URL"
+                                            value={baseUrl}
+                                            onChange={(e) => setBaseUrl(e.target.value)}
+                                            placeholder={formData.provider?.toLowerCase().includes('ollama') ? "http://localhost:11434" : "Optional for Cloud Providers"}
+                                            required={formData.provider?.toLowerCase().includes('ollama')}
+                                        />
+
+                                        <Input
+                                            label="API Key"
+                                            value={apiKey}
+                                            onChange={(e) => setApiKey(e.target.value)}
+                                            type="password"
+                                            placeholder={connection ? "Leave blank to keep unchanged" : "Enter API Key (Optional for Local)"}
+                                        />
+
+                                        <div className="grid grid-cols-1 gap-4">
+                                            <div className="w-full">
+                                                <label className="block text-sm font-sans font-medium text-[#9ca3af] mb-1.5">Model Name</label>
+                                                <select
+                                                    value={formData.details?.model_name || ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value
+                                                        setFormData(prev => ({ ...prev, details: { ...prev.details, model_name: val } }))
+                                                    }}
+                                                    className="w-full px-3 py-2 border border-[#1f2a44] rounded-lg bg-[#121b2f] text-[#e5e7eb] focus:ring-2 focus:ring-primary/30 outline-none"
+                                                    required
+                                                >
+                                                    <option value="" disabled>Select a Model</option>
+
+                                                    {formData.provider?.toLowerCase().includes('ollama') ? (
+                                                        <>
+                                                            <optgroup label="Llama">
+                                                                <option value="llama3">llama3</option>
+                                                                <option value="llama3:70b">llama3:70b</option>
+                                                                <option value="llama2">llama2</option>
+                                                            </optgroup>
+                                                            <optgroup label="Mistral / Mixtral">
+                                                                <option value="mistral">mistral</option>
+                                                                <option value="mixtral">mixtral</option>
+                                                            </optgroup>
+                                                            <optgroup label="Google">
+                                                                <option value="gemma">gemma</option>
+                                                            </optgroup>
+                                                            <optgroup label="Microsoft">
+                                                                <option value="phi3">phi3</option>
+                                                            </optgroup>
+                                                            <option value="custom">Custom (Type manually below)</option>
+                                                        </>
+                                                    ) : formData.provider?.toLowerCase().includes('gemini') ? (
+                                                        <>
+                                                            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                                                            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                                            <option value="gemini-1.0-pro">Gemini 1.0 Pro</option>
+                                                        </>
+                                                    ) : formData.provider?.toLowerCase().includes('perplexity') ? (
+                                                        <>
+                                                            <optgroup label="Llama 3.1">
+                                                                <option value="llama-3.1-sonar-small-128k-online">Sonar Small Online (8B)</option>
+                                                                <option value="llama-3.1-sonar-large-128k-online">Sonar Large Online (70B)</option>
+                                                                <option value="llama-3.1-sonar-huge-128k-online">Sonar Huge Online (405B)</option>
+                                                            </optgroup>
+                                                            <optgroup label="Llama 3.1 Chat">
+                                                                <option value="llama-3.1-sonar-small-128k-chat">Sonar Small Chat (8B)</option>
+                                                                <option value="llama-3.1-sonar-large-128k-chat">Sonar Large Chat (70B)</option>
+                                                            </optgroup>
+                                                        </>
+                                                    ) : (
+                                                        <option value="custom">Custom</option>
+                                                    )}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* Allow custom input if 'custom' is selected */}
+                                        {formData.details?.model_name === 'custom' && (
+                                            <Input
+                                                label="Custom Model Name"
+                                                value={formData.details?.custom_model_name || ''}
+                                                onChange={(e) => {
+                                                    const val = e.target.value
+                                                    setFormData(prev => ({ ...prev, details: { ...prev.details, custom_model_name: val } }))
+                                                }}
+                                                placeholder="Enter model name (e.g. my-finetune:v1)"
+                                                required
+                                            />
+                                        )}
+
+                                        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-sm text-blue-400 mt-4">
+                                            <p className="flex items-start gap-2">
+                                                <span className="text-lg">ℹ️</span>
+                                                <span>
+                                                    <strong>Note:</strong> Advanced configuration (Prompt Template, Timeout, Active Status) can be set using the <strong>Config</strong> button after creating the connection.
+                                                </span>
+                                            </p>
+                                        </div>
+                                    </>
                                 ) : (
                                     <>
                                         <Input
@@ -634,10 +788,11 @@ export function ConnectionModal({ isOpen, onClose, connection, onUpdate, categor
                                     {loading ? 'Saving...' : connection ? 'Update Connection' : 'Create Connection'}
                                 </Button>
                             </div>
+                            {/* Closing form and main content divs */}
                         </form>
                     </div>
                 </div>
-            </div >
-        </div >
+            </div>
+        </div>
     )
 }

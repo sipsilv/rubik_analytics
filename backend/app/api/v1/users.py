@@ -9,7 +9,7 @@ from app.models.feedback import Feedback
 from app.models.feature_request import FeatureRequest
 from app.schemas.user import UserResponse, UserUpdate, PasswordChange
 from app.schemas.admin import FeedbackResponse, FeatureRequestCreate, FeatureRequestResponse
-from app.services.ai_service import get_ai_service
+# AI service removed - feature requests no longer get AI analysis
 from fastapi import BackgroundTasks
 from datetime import datetime
 from pydantic import BaseModel
@@ -270,8 +270,8 @@ async def process_ai_analysis(feature_request_id: int, description: str, context
     from app.core.config import settings
     
     try:
-        ai_service = get_ai_service()
-        analysis = await ai_service.analyze_feature_request(description, context)
+        # AI analysis removed
+        analysis = None
         
         # Get new database session for background task
         router = get_db_router(settings.DATA_DIR)

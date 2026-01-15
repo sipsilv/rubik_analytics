@@ -170,12 +170,20 @@ function ChannelManagementContent() {
                                         />
                                     </TableCell>
                                     <TableCell>
-                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${channel.status === 'RUNNING' ? 'bg-success/10 text-success' :
-                                            channel.status === 'ERROR' ? 'bg-error/10 text-error' :
-                                                'bg-secondary text-text-secondary'
-                                            }`}>
-                                            {channel.status}
-                                        </span>
+                                        <div className="flex flex-col items-start gap-1">
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${channel.status === 'ACTIVE' ? 'bg-success/10 text-success' :
+                                                    channel.status === 'ERROR' ? 'bg-error/10 text-error' :
+                                                        'bg-secondary text-text-secondary'
+                                                }`}>
+                                                {channel.status}
+                                            </span>
+                                            {/* Show today count if active or generally available */}
+                                            {channel.today_count !== undefined && (
+                                                <span className="text-[10px] text-text-secondary pl-1">
+                                                    Today: {channel.today_count}
+                                                </span>
+                                            )}
+                                        </div>
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-2">
@@ -186,7 +194,7 @@ function ChannelManagementContent() {
                                                     setSelectedChannel(channel)
                                                     setIsStatusOpen(true)
                                                 }}
-                                                title="View Status"
+                                                title={`View Status (Today: ${channel.today_count || 0})`}
                                             >
                                                 <BarChart2 className="w-4 h-4" />
                                             </Button>

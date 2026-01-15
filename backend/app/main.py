@@ -67,7 +67,8 @@ app = FastAPI(
 # Use settings for CORS origins to support Docker networking
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    # Allow all origins for debugging "data not loading" issues
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -106,6 +107,49 @@ async def startup_event():
         
         import duckdb
         import os
+        import sys
+        
+        # ============================================
+        # SINGLE INSTANCE CHECK
+        # ============================================
+        # Normalize DATA_DIR to handle mixed path separators (forward/backward slashes)
+        pid_file = os.path.join(os.path.normpath(settings.DATA_DIR), "backend.pid")
+        try:
+            if os.path.exists(pid_file):
+                try:
+                    with open(pid_file, 'r') as f:
+                        old_pid = int(f.read().strip())
+                    
+                    # Check if process is still running
+                    # On Windows, os.kill(pid, 0) works to check existence
+                    os.kill(old_pid, 0)
+                    
+                    print(f"\n" + "!"*70)
+                    print(f" [CRITICAL] BACKEND ALREADY RUNNING (PID: {old_pid})")
+                    print(f"            Please stop it before starting a new instance.")
+                    print(f"            Run: server\\windows\\stop-all.bat")
+                    print("!"*70 + "\n")
+                    
+                    # Force exit to prevent DB corruption
+                    os._exit(1) 
+                except (OSError, ValueError):
+                    # Process dead or invalid PID, remove stale PID file
+                    print(f"[INFO] Removing stale PID file from previous run (PID: {old_pid if 'old_pid' in locals() else 'unknown'})")
+                    try:
+                        os.remove(pid_file)
+                    except:
+                        pass
+
+            # Write current PID
+            current_pid = os.getpid()
+            with open(pid_file, 'w') as f:
+                f.write(str(current_pid))
+                print(f"[INFO] PID file created: {current_pid}")
+                
+        except SystemExit:
+            raise
+        except Exception as e:
+            print(f"[WARNING] Failed to manage PID file: {e}")
         
         # ============================================
         # DATABASE CONNECTION STATUS
@@ -474,6 +518,13 @@ async def startup_event():
         except Exception as e:
             print(f"  Telegram Bot Poll : ERROR - {str(e)}")
         
+        # Start Worker Manager (Listeners, Extractors, Processors)
+        try:
+            from app.services.worker_manager import worker_manager
+            worker_manager.start_all()
+        except Exception as e:
+            print(f"  Worker Manager    : ERROR - {str(e)}")
+
         print("="*70)
         
         # Final startup message
@@ -512,7 +563,14 @@ async def shutdown_event():
         except Exception as e:
             print(f"[WARNING] Error stopping announcements WebSocket service: {e}")
         
-        
+        # Stop Worker Manager
+        try:
+            from app.services.worker_manager import worker_manager
+            worker_manager.stop_all()
+            print("[OK] Worker Manager stopped")
+        except Exception as e:
+            print(f"  Worker Manager    : ERROR - {str(e)}")
+
         # Close database connections
         try:
             manager = get_connection_manager(settings.DATA_DIR)
@@ -520,6 +578,27 @@ async def shutdown_event():
                 manager.close_all()
         except Exception as e:
             print(f"[WARNING] Error closing database connections: {e}")
+        
+        # Close Shared Database (DuckDB)
+        try:
+            from app.services.shared_db import get_shared_db
+            get_shared_db().close_all()
+            print("[OK] Shared Database connections closed")
+        except Exception as e:
+            print(f"[WARNING] Error closing Shared DB: {e}")
+
+        # Remove PID file
+        try:
+            import os
+            from app.core.config import settings
+            # Normalize DATA_DIR to handle mixed path separators
+            pid_file = os.path.join(os.path.normpath(settings.DATA_DIR), "backend.pid")
+            if os.path.exists(pid_file):
+                os.remove(pid_file)
+                print(f"[OK] PID file removed")
+        except Exception as e:
+            print(f"[WARNING] Error removing PID file: {e}")
+
         print("[OK] Server shutdown complete")
     except Exception as e:
         print(f"[WARNING] Shutdown error: {e}")
@@ -540,6 +619,9 @@ app.include_router(telegram_auth.router, prefix="/api/v1/telegram", tags=["teleg
 
 from app.api.v1 import telegram_channels
 app.include_router(telegram_channels.router, prefix="/api/v1/telegram-channels", tags=["telegram_channels"])
+
+from app.api.v1 import processors
+app.include_router(processors.router, prefix="/api/v1/processors", tags=["processors"])
 
 @app.get("/health")
 async def health_check():

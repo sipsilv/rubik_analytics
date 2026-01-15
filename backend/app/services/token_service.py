@@ -29,6 +29,7 @@ class TokenService:
     """Service for managing TrueData tokens with day-bound expiry"""
     
     def __init__(self):
+        # settings.DATA_DIR is already normalized in config.py
         self.data_dir = settings.DATA_DIR
         self.tokens_db_path = os.path.join(self.data_dir, "connection", "truedata", "tokens.duckdb")
         self._init_database()

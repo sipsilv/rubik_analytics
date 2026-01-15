@@ -12,6 +12,9 @@ interface ViewConnectionModalProps {
 
 export function ViewConnectionModal({ isOpen, onClose, connection }: ViewConnectionModalProps) {
     const [isVisible, setIsVisible] = useState(false)
+    const [testing, setTesting] = useState(false)
+    const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
+    const [localConnection, setLocalConnection] = useState(connection)
 
     // Animation state - sync with modal open/close
     useEffect(() => {
@@ -29,7 +32,37 @@ export function ViewConnectionModal({ isOpen, onClose, connection }: ViewConnect
         }
     }, [isOpen])
 
-    if (!isOpen || !connection) return null
+    useEffect(() => {
+        setLocalConnection(connection)
+        setTestResult(null)
+    }, [connection])
+
+    const handleTest = async () => {
+        if (!localConnection?.id) return
+        setTesting(true)
+        setTestResult(null)
+        try {
+            const { adminAPI } = require('@/lib/api') // Lazy load to avoid circular deps if any
+            const res = await adminAPI.testConnection(String(localConnection.id))
+            setTestResult({
+                success: res.success,
+                message: res.message
+            })
+            // Update local status if returned
+            if (res.status) {
+                setLocalConnection(prev => ({ ...prev, status: res.status }))
+            }
+        } catch (e: any) {
+            setTestResult({
+                success: false,
+                message: e.message || 'Test failed'
+            })
+        } finally {
+            setTesting(false)
+        }
+    }
+
+    if (!isOpen || !localConnection) return null
 
     // Using same structure as ConnectionModal for consistency
     return (
@@ -88,64 +121,112 @@ export function ViewConnectionModal({ isOpen, onClose, connection }: ViewConnect
                             <h2 className="text-xl font-sans font-semibold text-[#e5e7eb]">
                                 Connection Details
                             </h2>
+                            {['AI_ML', 'TELEGRAM_BOT'].includes(localConnection.connection_type) && (
+                                <Button
+                                    size="sm"
+                                    onClick={handleTest}
+                                    disabled={testing}
+                                    variant={testing ? 'secondary' : 'primary'}
+                                >
+                                    {testing ? 'Testing...' : 'Test Connection'}
+                                </Button>
+                            )}
                         </div>
+
+                        {testResult && (
+                            <div className={`mb-6 p-3 rounded-lg border text-sm ${testResult.success
+                                ? 'bg-success/10 border-success/20 text-success'
+                                : 'bg-error/10 border-error/20 text-error'
+                                }`}>
+                                <div className="font-bold mb-1">
+                                    {testResult.success ? '✓ Test Successful' : '✕ Test Failed'}
+                                </div>
+                                {testResult.message}
+                            </div>
+                        )}
 
                         <div className="space-y-6">
                             {/* Header Info */}
                             <div className="flex items-start justify-between">
                                 <div>
-                                    <h3 className="text-lg font-bold text-text-primary">{connection.name}</h3>
-                                    <p className="text-sm text-text-secondary">{connection.provider} • {connection.connection_type}</p>
+                                    <h3 className="text-lg font-bold text-text-primary">{localConnection.name}</h3>
+                                    <p className="text-sm text-text-secondary">{localConnection.provider} • {localConnection.connection_type}</p>
                                 </div>
                                 <div className="flex gap-2">
-                                    <span className={`px-2 py-1 text-xs font-bold rounded uppercase ${connection.status === 'CONNECTED' ? 'bg-success/10 text-success' :
-                                        connection.status === 'ERROR' ? 'bg-error/10 text-error' : 'bg-gray-500/10 text-gray-500'
-                                        }`}>{connection.status}</span>
-                                    <span className={`px-2 py-1 text-xs font-bold rounded uppercase ${connection.environment === 'PROD' ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning'
-                                        }`}>{connection.environment}</span>
+                                    <span className={`px-2 py-1 text-xs font-bold rounded uppercase ${localConnection.status === 'CONNECTED' ? 'bg-success/10 text-success' :
+                                        localConnection.status === 'ERROR' ? 'bg-error/10 text-error' : 'bg-gray-500/10 text-gray-500'
+                                        }`}>{localConnection.status}</span>
+                                    <span className={`px-2 py-1 text-xs font-bold rounded uppercase ${localConnection.environment === 'PROD' ? 'bg-primary/10 text-primary' : 'bg-warning/10 text-warning'
+                                        }`}>{localConnection.environment}</span>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-6 bg-secondary/5 p-4 rounded-lg border border-[#1f2a44]">
                                 <div>
                                     <label className="text-xs font-semibold text-text-secondary uppercase">Health</label>
-                                    <div className={`mt-1 font-medium ${connection.health === 'HEALTHY' ? 'text-success' :
-                                        connection.health === 'DOWN' ? 'text-error' : 'text-warning'
-                                        }`}>{connection.health}</div>
+                                    <div className={`mt-1 font-medium ${localConnection.health === 'HEALTHY' ? 'text-success' :
+                                        localConnection.health === 'DOWN' ? 'text-error' : 'text-warning'
+                                        }`}>{localConnection.health}</div>
                                 </div>
                                 <div>
                                     <label className="text-xs font-semibold text-text-secondary uppercase">Last Checked</label>
                                     <div className="mt-1 text-text-primary text-sm">
-                                        {connection.last_checked_at ? new Date(connection.last_checked_at).toLocaleString() : 'Never'}
+                                        {localConnection.last_checked_at ? new Date(localConnection.last_checked_at).toLocaleString() : 'Never'}
                                     </div>
                                 </div>
                                 <div>
                                     <label className="text-xs font-semibold text-text-secondary uppercase">Created At</label>
                                     <div className="mt-1 text-text-primary text-sm">
-                                        {new Date(connection.created_at).toLocaleDateString()}
+                                        {new Date(localConnection.created_at).toLocaleDateString()}
                                     </div>
                                 </div>
                                 <div>
                                     <label className="text-xs font-semibold text-text-secondary uppercase">Enabled</label>
                                     <div className="mt-1 text-text-primary text-sm">
-                                        {connection.is_enabled ? 'Yes' : 'No'}
+                                        {localConnection.is_enabled ? 'Yes' : 'No'}
                                     </div>
                                 </div>
                             </div>
 
+                            {/* AI Specific Details */}
+                            {localConnection.connection_type === 'AI_ML' && (
+                                <div className="bg-secondary/5 p-4 rounded-lg border border-[#1f2a44] space-y-3">
+                                    <h4 className="text-sm font-semibold text-text-primary uppercase tracking-wider mb-2">AI Configuration</h4>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {localConnection.details?.model_name && (
+                                            <div>
+                                                <label className="text-xs font-semibold text-text-secondary uppercase">Model Name</label>
+                                                <div className="text-sm text-text-primary mt-1 font-mono bg-background/30 px-2 py-1 rounded inline-block">
+                                                    {localConnection.details.model_name}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {localConnection.details?.base_url && (
+                                            <div>
+                                                <label className="text-xs font-semibold text-text-secondary uppercase">Base URL</label>
+                                                <div className="text-sm text-text-primary mt-1 truncate" title={localConnection.details.base_url}>
+                                                    {localConnection.details.base_url}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             <div>
                                 <label className="text-xs font-semibold text-text-secondary uppercase mb-2 block">Description</label>
                                 <p className="text-sm text-text-primary bg-background/50 p-3 rounded border border-border">
-                                    {connection.description || 'No description provided.'}
+                                    {localConnection.description || 'No description provided.'}
                                 </p>
                             </div>
 
                             {/* Logs Section */}
-                            {connection.error_logs && (
+                            {localConnection.error_logs && (
                                 <div className="bg-error/5 border border-error/20 rounded-lg p-4">
                                     <label className="text-xs font-semibold text-error uppercase mb-2 block">Latest Error Log</label>
                                     <pre className="text-xs font-mono text-error whitespace-pre-wrap">
-                                        {connection.error_logs}
+                                        {localConnection.error_logs}
                                     </pre>
                                 </div>
                             )}
