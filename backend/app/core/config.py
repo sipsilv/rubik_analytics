@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     ENCRYPTION_KEY: str
     
     # CORS - can be comma-separated string or list
-    CORS_ORIGINS: Union[str, List[str]] = "http://localhost:3000"
+    CORS_ORIGINS: Union[str, List[str]] = "http://localhost:3000, https://rubikanalytics.net"
     
     # TrueData Connection Defaults
     TRUEDATA_DEFAULT_AUTH_URL: str = "https://auth.truedata.in/token"
