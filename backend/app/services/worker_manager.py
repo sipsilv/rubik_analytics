@@ -13,7 +13,8 @@ from app.services.telegram_deduplication.db import ensure_schema as init_dedup_d
 from app.services.news_scoring.main import process_batch as process_scoring_batch
 from app.services.news_scoring.db import ensure_schema as init_scoring_db
 
-# AI enrichment removed - AI connections still available via ai_connection_manager
+from app.services.news_ai.processor import run_once as process_ai_batch
+from app.services.news_ai.db import ensure_schema as init_ai_db
 
 logger = logging.getLogger("WorkerManager")
 
@@ -103,6 +104,27 @@ async def run_scoring_service():
             logger.error(f"[Scorer] Error: {e}")
             await asyncio.sleep(5)
 
+async def run_ai_enrichment_service():
+    """Runs the AI Enrichment Worker (Loop)."""
+    try:
+        logger.info("[AI Enrichment] Initializing DB...")
+        await asyncio.to_thread(init_ai_db)
+    except Exception as e:
+        logger.error(f"[AI Enrichment] DB Init failed: {e}")
+
+    logger.info("[AI Enrichment] Started loop.")
+    while True:
+        try:
+            count = await asyncio.to_thread(process_ai_batch)
+            if count == 0:
+                await asyncio.sleep(10) # AI is expensive/slower, sleep more
+            else:
+                logger.info(f"[AI Enrichment] Enriched {count} items.")
+                await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"[AI Enrichment] Error: {e}")
+            await asyncio.sleep(10)
+
 
 async def run_cleanup_task():
     """Runs periodic cleanup for listener DB."""
@@ -134,7 +156,8 @@ class WorkerManager:
         # 4. Scorer
         self.tasks.append(asyncio.create_task(run_scoring_service()))
         
-        # AI Enrichment removed
+        # 5. AI Enrichment
+        self.tasks.append(asyncio.create_task(run_ai_enrichment_service()))
         
         logger.info("All workers started in background.")
 

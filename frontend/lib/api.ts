@@ -359,6 +359,18 @@ export const adminAPI = {
     const response = await api.get('/processors/stats')
     return response.data
   },
+  getAIEnrichmentConfig: async () => {
+    const response = await api.get('/admin/ai-enrichment-config')
+    return response.data
+  },
+  createAIEnrichmentConfig: async (data: any) => {
+    const response = await api.post('/admin/ai-enrichment-config', data)
+    return response.data
+  },
+  updateAIEnrichmentConfig: async (id: string, data: any) => {
+    const response = await api.put(`/admin/ai-enrichment-config/${id}`, data)
+    return response.data
+  },
 }
 
 

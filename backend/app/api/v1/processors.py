@@ -28,6 +28,7 @@ def get_processor_stats(
 
 from app.services.telegram_extractor.db import get_recent_extractions
 from app.services.news_scoring.db import get_recent_scores
+from app.services.news_ai.db import get_recent_enrichments
 
 @router.get("/data/{table_type}")
 def get_processor_data(
@@ -43,7 +44,6 @@ def get_processor_data(
     elif table_type == 'scoring':
         return get_recent_scores(limit)
     elif table_type == 'enrichment':
-        # AI enrichment removed
-        return []
+        return get_recent_enrichments(limit)
     else:
         return []

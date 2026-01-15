@@ -1325,3 +1325,71 @@ async def get_indicators(
     # TODO: Implement Indicator model or DuckDB query
     return []
 
+# AI Enrichment Configuration Endpoints
+@router.get("/ai-enrichment-config")
+async def get_ai_enrichment_configs(
+    admin: User = Depends(get_admin_user)
+):
+    """Get all AI enrichment configurations."""
+    try:
+        from app.services.ai_enrichment_config_manager import get_all_enrichment_configs, get_active_enrichment_config
+        
+        configs = get_all_enrichment_configs()
+        active_config = get_active_enrichment_config()
+        
+        return {
+            "configs": configs,
+            "active_config": active_config
+        }
+    except Exception as e:
+        logger.error(f"Error fetching AI enrichment configs: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch AI enrichment configs: {str(e)}")
+
+@router.post("/ai-enrichment-config")
+async def create_ai_enrichment_config(
+    data: dict,
+    admin: User = Depends(get_admin_user)
+):
+    """Create a new AI enrichment configuration."""
+    try:
+        from app.services.ai_enrichment_config_manager import create_enrichment_config
+        
+        # Validate required fields
+        if not data.get('connection_id'):
+            raise HTTPException(status_code=400, detail="connection_id is required")
+        if not data.get('model_name'):
+            raise HTTPException(status_code=400, detail="model_name is required")
+        if not data.get('prompt_text'):
+            raise HTTPException(status_code=400, detail="prompt_text is required")
+        
+        config = create_enrichment_config(data)
+        return config
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating AI enrichment config: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create AI enrichment config: {str(e)}")
+
+@router.put("/ai-enrichment-config/{config_id}")
+async def update_ai_enrichment_config(
+    config_id: int,
+    data: dict,
+    admin: User = Depends(get_admin_user)
+):
+    """Update an existing AI enrichment configuration."""
+    try:
+        from app.services.ai_enrichment_config_manager import update_enrichment_config, get_enrichment_config
+        
+        # Check if config exists
+        existing = get_enrichment_config(config_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail=f"Config {config_id} not found")
+        
+        config = update_enrichment_config(config_id, data)
+        return config
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating AI enrichment config: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update AI enrichment config: {str(e)}")
+

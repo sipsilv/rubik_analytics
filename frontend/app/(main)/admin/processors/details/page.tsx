@@ -4,16 +4,19 @@ import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/Card'
 import { Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell } from '@/components/ui/Table'
 import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
 import { adminAPI } from '@/lib/api'
-import { ArrowLeft, Eye } from 'lucide-react'
+import { ArrowLeft, Eye, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { RefreshButton } from '@/components/ui/RefreshButton'
+import { AIEnrichmentConfigModal } from '@/components/AIEnrichmentConfigModal'
 
 export default function ProcessorDetailsPage() {
     const [activeTab, setActiveTab] = useState('extraction')
     const [tableData, setTableData] = useState<any[]>([])
     const [dataLoading, setDataLoading] = useState(false)
     const [selectedContent, setSelectedContent] = useState<string | null>(null)
+    const [configModalOpen, setConfigModalOpen] = useState(false)
 
     const formatToIST = (dateString: string) => {
         if (!dateString) return '-'
@@ -72,11 +75,23 @@ export default function ProcessorDetailsPage() {
                         View detailed records from the processing pipeline
                     </p>
                 </div>
-                <RefreshButton
-                    className="ml-auto"
-                    onClick={async () => await loadData(activeTab)}
-                    disabled={dataLoading}
-                />
+                <div className="ml-auto flex items-center gap-2">
+                    <RefreshButton
+                        onClick={async () => await loadData(activeTab)}
+                        disabled={dataLoading}
+                    />
+                    {activeTab === 'enrichment' && (
+                        <Button
+                            onClick={() => setConfigModalOpen(true)}
+                            variant="secondary"
+                            size="sm"
+                            className="gap-2"
+                        >
+                            <Settings className="w-4 h-4" />
+                            Config
+                        </Button>
+                    )}
+                </div>
             </div>
 
             {/* Data Tables Section */}
@@ -137,6 +152,7 @@ export default function ProcessorDetailsPage() {
                                     <>
                                         <TableHeaderCell>Final ID</TableHeaderCell>
                                         <TableHeaderCell>Processed At</TableHeaderCell>
+                                        <TableHeaderCell>Link</TableHeaderCell>
                                         <TableHeaderCell>Headline</TableHeaderCell>
                                         <TableHeaderCell>Category</TableHeaderCell>
                                         <TableHeaderCell>Sentiment</TableHeaderCell>
@@ -229,7 +245,35 @@ export default function ProcessorDetailsPage() {
                                             <>
                                                 <TableCell className="font-mono text-xs text-text-secondary">{row.final_id}</TableCell>
                                                 <TableCell className="text-text-secondary text-xs">{formatToIST(row.processed_at)}</TableCell>
-                                                <TableCell className="font-medium text-text-primary">{row.headline}</TableCell>
+                                                <TableCell>
+                                                    {row.url ? (
+                                                        <a
+                                                            href={row.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-primary hover:underline text-xs"
+                                                            title={row.url}
+                                                        >
+                                                            Link
+                                                        </a>
+                                                    ) : (
+                                                        <span className="text-text-secondary/50 text-xs">-</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => setSelectedContent(row.summary || 'No summary available')}
+                                                            className="p-1 hover:bg-[#1f2a44] rounded text-primary transition-colors flex-shrink-0"
+                                                            title="View Full Summary"
+                                                        >
+                                                            <Eye className="w-4 h-4" />
+                                                        </button>
+                                                        <span className="font-medium text-text-primary" title={row.headline}>
+                                                            {row.headline}
+                                                        </span>
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell>
                                                     <span className="text-xs px-2 py-0.5 bg-secondary/10 rounded-full text-secondary">
                                                         {row.category}
@@ -237,7 +281,7 @@ export default function ProcessorDetailsPage() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <span className={`text-xs font-bold ${row.sentiment === 'Positive' ? 'text-success' :
-                                                            row.sentiment === 'Negative' ? 'text-error' : 'text-warning'
+                                                        row.sentiment === 'Negative' ? 'text-error' : 'text-warning'
                                                         }`}>
                                                         {row.sentiment}
                                                     </span>
@@ -264,6 +308,12 @@ export default function ProcessorDetailsPage() {
                     {selectedContent || "No content available."}
                 </div>
             </Modal>
+
+            <AIEnrichmentConfigModal
+                isOpen={configModalOpen}
+                onClose={() => setConfigModalOpen(false)}
+                onUpdate={() => loadData(activeTab)}
+            />
         </div>
     )
 }

@@ -35,6 +35,11 @@ graph TD
     K -->|Score < 25| M[DECISION: DROP]
     
     L --> N[Global News Feed & Signals]
+    
+    %% Stage 5: AI Enrichment
+    L -->|AI Enrichment Worker| O{AI Model}
+    O -->|Structured JSON| P[AI News DB]
+    P --> Q[Market Sentiment & Analysis]
 ```
 
 ---
@@ -75,7 +80,15 @@ graph TD
 ### Stage 4: The Scoring Engine (`news_scoring`)
 * **Goal**: Evaluate relevance and filter spam.
 * **Mechanism**: Applies a weighted scoring model to every *unique* message.
-* **Decision Gate**: Only messages with a **Final Score >= 25** pass through to the dashboard.
+* **Decision Gate**: Only messages with a **Final Score >= 25** pass through.
+
+### Stage 5: AI Enrichment (`news_ai`)
+* **Goal**: Extract semi-structured financial data from scored news.
+* **Mechanism**: Uses the active AI configuration (OpenAI, Gemini, or Ollama).
+* **Functionality**:
+    *   **Context Injection**: Injects the news text into a structured prompt.
+    *   **Information Extraction**: Extract category, sub-type, company name, ticker, exchange, headline, summary, and sentiment.
+    *   **Structured Storage**: Saves the enriched data to `news_ai.duckdb` for downstream use in signals and dashboards.
 
 #### Scoring Components (The "Brain")
 
@@ -146,12 +159,14 @@ The Scorer uses a highly specific dictionary to classify news. A message receive
 *   **Listener**: `data/News/Raw/telegram_listing.duckdb` (Raw Stream)
 *   **Extractor**: `data/News/Raw/telegram_raw.duckdb` (Processed & Deduped)
 *   **Scorer**: `data/News/Scoring/news_scoring.duckdb` (Final Decisions)
+*   **AI Enrichment**: `data/News/Final/news_ai.duckdb` (Enriched Structured News)
 
 ### Service Entry Points
 *   `app.services.telegram_raw_listener.main`
 *   `app.services.telegram_extractor.main`
 *   `app.services.telegram_deduplication.main`
 *   `app.services.news_scoring.main`
+*   `app.services.news_ai.main`
 
 ---
 *Documentation updated: 2026-01-15*

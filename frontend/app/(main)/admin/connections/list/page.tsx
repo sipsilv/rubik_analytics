@@ -7,13 +7,14 @@ import { Card } from '@/components/ui/Card'
 import { Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { RefreshButton } from '@/components/ui/RefreshButton'
-import { ArrowLeft, Settings, Trash2, Search, Plus, Eye, Edit, Sparkles } from 'lucide-react'
+import { ArrowLeft, Settings, Trash2, Search, Plus, Eye, Edit, PlayCircle } from 'lucide-react'
 import { Switch } from '@/components/ui/Switch'
 import { SmartTooltip } from '@/components/ui/SmartTooltip'
 import { ConnectionModal } from '@/components/ConnectionModal'
 import { ViewConnectionModal } from '@/components/ViewConnectionModal'
 import { DeleteConfirmationModal } from '@/components/DeleteConfirmationModal'
 import { AIConfigModal } from '@/components/AIConfigModal'
+import { TestResultModal } from '@/components/TestResultModal'
 
 function ConnectionListContent() {
     const router = useRouter()
@@ -56,6 +57,10 @@ function ConnectionListContent() {
     const [deleteModalOpen, setDeleteModalOpen] = useState(false)
     const [connToDelete, setConnToDelete] = useState<any>(null)
     const [isDeleting, setIsDeleting] = useState(false)
+
+    // Test Result Modal
+    const [testResultOpen, setTestResultOpen] = useState(false)
+    const [testResult, setTestResult] = useState<{ success: boolean, message: string } | null>(null)
 
     // Filtered connections
     const filteredConnections = connections.filter(c => {
@@ -117,6 +122,25 @@ function ConnectionListContent() {
         } catch (e) {
             console.error('Error toggling connection:', e)
             alert('Failed to toggle connection status')
+        }
+    }
+
+    const handleTestConnection = async (id: string) => {
+        try {
+            const result = await adminAPI.testConnection(id)
+            setTestResult({
+                success: result.success,
+                message: result.message || (result.success ? 'Connection successful!' : 'Connection failed')
+            })
+            setTestResultOpen(true)
+            loadConnections()
+        } catch (e: any) {
+            console.error('Error testing connection:', e)
+            setTestResult({
+                success: false,
+                message: e.message || 'Failed to test connection'
+            })
+            setTestResultOpen(true)
         }
     }
 
@@ -279,22 +303,20 @@ function ConnectionListContent() {
                                                 </SmartTooltip>
                                             )}
 
-                                            {/* AI Config Button (Explicit as requested) */}
+                                            {/* AI Test Button */}
                                             {conn.connection_type === 'AI_ML' && (
-                                                <SmartTooltip text="Configure AI Model">
+                                                <SmartTooltip text="Test Connection">
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
-                                                        onClick={() => {
-                                                            setSelectedConn(conn)
-                                                            setIsAIConfigOpen(true)
-                                                        }}
-                                                        className="p-1.5 text-purple-400 hover:text-purple-300 hover:bg-purple-400/10"
+                                                        onClick={() => handleTestConnection(conn.id)}
+                                                        className="p-1.5 text-green-400 hover:text-green-300 hover:bg-green-400/10"
                                                     >
-                                                        <Sparkles className="w-4 h-4 btn-icon-hover icon-button icon-button-bounce" />
+                                                        <PlayCircle className="w-4 h-4 btn-icon-hover icon-button icon-button-bounce" />
                                                     </Button>
                                                 </SmartTooltip>
                                             )}
+
 
                                             <SmartTooltip text="Edit">
 
@@ -364,6 +386,16 @@ function ConnectionListContent() {
                 connectionName={connToDelete?.name}
                 isLoading={isDeleting}
             />
+
+            {/* Test Result Modal */}
+            {testResult && (
+                <TestResultModal
+                    isOpen={testResultOpen}
+                    onClose={() => setTestResultOpen(false)}
+                    success={testResult.success}
+                    message={testResult.message}
+                />
+            )}
         </div>
     )
 }
