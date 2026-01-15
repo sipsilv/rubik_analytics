@@ -4,14 +4,24 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import Cookies from 'js-cookie'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-// Convert HTTP URL to WebSocket URL
 const getWebSocketUrl = (): string => {
-  const url = API_URL.replace(/^http/, 'ws')
-  const token = Cookies.get('auth_token')
-  const wsPath = `${url}/api/v1/ws`
-  return token ? `${wsPath}?token=${token}` : wsPath
-}
+  if (!API_URL) {
+    throw new Error("API_URL is not defined");
+  }
+
+  const u = new URL(API_URL);
+
+  // Force correct protocol
+  u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+  u.pathname = "/api/v1/ws";
+
+  const token = Cookies.get("auth_token");
+  if (token) {
+    u.searchParams.set("token", token);
+  }
+
+  return u.toString();
+};
 
 export interface Announcement {
   id: string
