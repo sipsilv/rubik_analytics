@@ -37,7 +37,7 @@ class TokenService:
         """Initialize the tokens database schema - STANDARDIZED SCHEMA (FINAL)"""
         os.makedirs(os.path.dirname(self.tokens_db_path), exist_ok=True)
         
-        conn = duckdb.connect(self.tokens_db_path)
+        conn = duckdb.connect(self.tokens_db_path, config={'allow_unsigned_extensions': True})
         try:
             # Check if table exists and get current columns
             table_exists = False
@@ -226,7 +226,7 @@ class TokenService:
                 expires_at_ist_verify = None
             
             # Store token with standardized schema
-            conn = duckdb.connect(self.tokens_db_path)
+            conn = duckdb.connect(self.tokens_db_path, config={'allow_unsigned_extensions': True})
             try:
                 existing = conn.execute("""
                     SELECT id FROM tokens WHERE connection_id = ?
@@ -298,7 +298,7 @@ class TokenService:
         
         If auto_refresh=True and token is expired/expiring, attempts to refresh automatically
         """
-        conn = duckdb.connect(self.tokens_db_path)
+        conn = duckdb.connect(self.tokens_db_path, config={'allow_unsigned_extensions': True})
         try:
             result = conn.execute("""
                 SELECT access_token, expires_at, status
@@ -363,7 +363,7 @@ class TokenService:
             - last_refreshed_at: ISO timestamp
             - seconds_left: seconds until expiry at 4:00 AM IST (can be negative if expired)
         """
-        conn = duckdb.connect(self.tokens_db_path)
+        conn = duckdb.connect(self.tokens_db_path, config={'allow_unsigned_extensions': True})
         try:
             result = conn.execute("""
                 SELECT
@@ -604,7 +604,7 @@ class TokenService:
         # Refresh if expired (refresh happens AFTER expiry, not before)
         if token_status["token_status"] == "EXPIRED":
             # Check if we recently refreshed (within last 2 minutes) to prevent repeated refreshes
-            conn = duckdb.connect(self.tokens_db_path)
+            conn = duckdb.connect(self.tokens_db_path, config={'allow_unsigned_extensions': True})
             try:
                 result = conn.execute("""
                     SELECT last_refreshed_at FROM tokens WHERE connection_id = ?
@@ -681,7 +681,7 @@ class TokenService:
     
     def delete_token(self, connection_id: int) -> bool:
         """Delete token for connection"""
-        conn = duckdb.connect(self.tokens_db_path)
+        conn = duckdb.connect(self.tokens_db_path, config={'allow_unsigned_extensions': True})
         try:
             conn.execute("DELETE FROM tokens WHERE connection_id = ?", [connection_id])
             conn.commit()
@@ -694,7 +694,7 @@ class TokenService:
     
     def _set_token_status(self, connection_id: int, status: str) -> bool:
         """Set token status (ACTIVE, EXPIRING, EXPIRED, ERROR)"""
-        conn = duckdb.connect(self.tokens_db_path)
+        conn = duckdb.connect(self.tokens_db_path, config={'allow_unsigned_extensions': True})
         try:
             conn.execute("""
                 UPDATE tokens SET status = ?
@@ -828,7 +828,7 @@ class TokenService:
         doesn't hit TrueData API unless refresh is needed
         Refresh happens AFTER expiry, not before
         """
-        conn = duckdb.connect(self.tokens_db_path)
+        conn = duckdb.connect(self.tokens_db_path, config={'allow_unsigned_extensions': True})
         try:
             # Get all active tokens
             results = conn.execute("""

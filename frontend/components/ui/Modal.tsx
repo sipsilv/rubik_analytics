@@ -15,6 +15,7 @@ interface ModalProps {
   minWidth?: string
   zIndex?: number
   preventBodyScroll?: boolean
+  scrollable?: boolean
 }
 
 /**
@@ -35,6 +36,7 @@ export function Modal({
   minWidth = '400px',
   zIndex = 9999,
   preventBodyScroll = true,
+  scrollable = true,
 }: ModalProps) {
   const [mounted, setMounted] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
@@ -104,13 +106,13 @@ export function Modal({
         }
       }}
     >
-      <div 
+      <div
         className="relative"
         onClick={(e) => e.stopPropagation()}
       >
         <div
           className={`bg-[#121b2f] border border-[#1f2a44] rounded-lg shadow-xl w-full ${maxWidth} mx-4 max-h-[90vh] relative modal-content`}
-          style={{ 
+          style={{
             zIndex: zIndex + 1,
             minWidth: minWidth,
             width: 'auto',
@@ -118,24 +120,24 @@ export function Modal({
             animation: isVisible ? 'modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
           }}
         >
-        {/* Close Button - Positioned outside modal at top-right, aligned with modal top */}
-        {showCloseButton && (
-          <button
-            onClick={onClose}
-            className="absolute top-0 -right-12 w-8 h-8 p-0 bg-transparent hover:bg-red-600 rounded text-red-600 hover:text-white transition-colors z-[10001] flex items-center justify-center modal-close-button"
-            title="Close"
-            aria-label="Close"
-            style={{
-              animation: isVisible ? 'modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
-            }}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        )}
+          {/* Close Button - Positioned outside modal at top-right, aligned with modal top */}
+          {showCloseButton && (
+            <button
+              onClick={onClose}
+              className="absolute top-0 -right-12 w-8 h-8 p-0 bg-transparent hover:bg-red-600 rounded text-red-600 hover:text-white transition-colors z-[10001] flex items-center justify-center modal-close-button"
+              title="Close"
+              aria-label="Close"
+              style={{
+                animation: isVisible ? 'modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
+              }}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
           {/* Modal Content */}
-          <div className="p-6 max-h-[90vh] overflow-y-auto">
+          <div className={`p-6 max-h-[90vh] ${scrollable ? 'overflow-y-auto' : 'flex flex-col overflow-hidden'}`}>
             {title && (
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-6 shrink-0">
                 <h2 className="text-xl font-sans font-semibold text-[#e5e7eb]">
                   {title}
                 </h2>
@@ -166,6 +168,7 @@ export function SecondaryModal({
   maxWidth = 'max-w-md',
   minWidth = '400px',
   preventBodyScroll = true,
+  scrollable = true,
 }: Omit<ModalProps, 'zIndex'>) {
   const [mounted, setMounted] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
@@ -238,13 +241,13 @@ export function SecondaryModal({
         }
       }}
     >
-      <div 
+      <div
         className="relative"
         onClick={(e) => e.stopPropagation()}
       >
         <div
           className={`bg-[#121b2f] border border-[#1f2a44] rounded-lg shadow-xl w-full ${maxWidth} mx-4 max-h-[90vh] relative secondary-modal-content`}
-          style={{ 
+          style={{
             zIndex: 10001,
             minWidth: minWidth,
             width: 'auto',
@@ -252,24 +255,24 @@ export function SecondaryModal({
             animation: isVisible ? 'modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
           }}
         >
-        {/* Close Button - Positioned outside modal at top-right, aligned with modal top */}
-        {showCloseButton && (
-          <button
-            onClick={onClose}
-            className="absolute top-0 -right-12 w-8 h-8 p-0 bg-transparent hover:bg-red-600 rounded text-red-600 hover:text-white transition-colors z-[10002] flex items-center justify-center secondary-modal-close-button"
-            title="Close"
-            aria-label="Close"
-            style={{
-              animation: isVisible ? 'modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
-            }}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        )}
+          {/* Close Button - Positioned outside modal at top-right, aligned with modal top */}
+          {showCloseButton && (
+            <button
+              onClick={onClose}
+              className="absolute top-0 -right-12 w-8 h-8 p-0 bg-transparent hover:bg-red-600 rounded text-red-600 hover:text-white transition-colors z-[10002] flex items-center justify-center secondary-modal-close-button"
+              title="Close"
+              aria-label="Close"
+              style={{
+                animation: isVisible ? 'modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
+              }}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
           {/* Modal Content */}
-          <div className="p-6 max-h-[90vh] overflow-y-auto">
+          <div className={`p-6 max-h-[90vh] ${scrollable ? 'overflow-y-auto' : 'flex flex-col overflow-hidden'}`}>
             {title && (
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-6 shrink-0">
                 <h2 className="text-xl font-sans font-semibold text-[#e5e7eb]">
                   {title}
                 </h2>

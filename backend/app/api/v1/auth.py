@@ -3,10 +3,10 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.core.database import get_db
-from app.core.security import verify_password, create_access_token
+from app.core.security import verify_password, create_access_token, get_password_hash
 from app.core.permissions import get_current_user, get_current_user_from_token
 from app.models.user import User
-from app.schemas.auth import LoginRequest, TokenResponse, ForgotPasswordRequest, ForgotPasswordResponse
+from app.schemas.auth import LoginRequest, TokenResponse, ForgotPasswordRequest, ForgotPasswordResponse, ResetPasswordRequest, ResetPasswordResponse
 from datetime import datetime
 
 router = APIRouter()
@@ -87,6 +87,60 @@ async def login(
             detail="Incorrect identifier or password"
         )
     
+    # -------------------------------------------------------------
+    # TELEGRAM OTP CHECK (Before any role bypass)
+    # -------------------------------------------------------------
+    from app.services.telegram_bot_service import TelegramBotService
+    from app.core.database import get_connection_manager
+    from app.core.config import settings
+    
+    # Only enforce if user has linked Telegram AND has enabled 2FA
+    print(f"[AUTH DEBUG] Login - User: {user.username}, ChatID: {user.telegram_chat_id}, 2FA Enabled: {user.two_factor_enabled}")
+    if user.telegram_chat_id and user.two_factor_enabled:
+        # Check if OTP is provided
+        manager = get_connection_manager(settings.DATA_DIR)
+        bot_service = TelegramBotService(manager)
+        
+        if not login_data.otp:
+            # Generate and send OTP
+            code = bot_service.generate_otp(user.mobile)
+            message = (
+                f"🔐 <b>Login Verification Required</b>\n\n"
+                f"Hello <b>{user.username}</b>,\n\n"
+                f"Your login OTP is: <code>{code}</code>\n\n"
+                f"⏰ Valid for <b>5 minutes</b>\n"
+                f"⚠️ If this wasn't you, secure your account immediately.\n\n"
+                f"— Rubik Analytics Security Team"
+            )
+            try:
+                sent = await bot_service.send_message(user.telegram_chat_id, message)
+            except Exception as e:
+                print(f"[AUTH] Error sending OTP: {e}")
+                sent = False
+            
+            if sent:
+                print(f"[AUTH] OTP sent to Telegram user {user.username} (Chat ID: {user.telegram_chat_id})")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="OTP code sent to Telegram. Please enterthe code."
+                )
+            else:
+                # Fallback if bot fails
+                print(f"[AUTH] Failed to send OTP to Telegram user {user.username}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to send security OTP. Please contact admin."
+                )
+        else:
+            # Verify OTP
+            if not bot_service.verify_otp(user.mobile, login_data.otp):
+                 print(f"[AUTH] Invalid OTP for user {user.username}")
+                 raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired OTP code"
+                )
+            print(f"[AUTH] OTP verified for user {user.username}")
+
     # CRITICAL: Check for Super User FIRST - bypass ALL status checks
     # This check happens BEFORE any is_active validation
     user_role_lower = user.role.lower() if user.role else ""
@@ -146,6 +200,8 @@ async def login(
             }
         )
     
+
+    
     # For non-Super Users ONLY: Check is_active status and account_status
     print(f"[AUTH] Regular user login - checking is_active status...")
     print(f"[AUTH] User status - is_active: {user.is_active}, account_status: {user.account_status}")
@@ -182,6 +238,9 @@ async def login(
     
     db.commit()
     
+            
+    # -------------------------------------------------------------
+
     access_token = create_access_token(data={"sub": user.username})
     
     return TokenResponse(
@@ -219,14 +278,107 @@ async def forgot_password(
     request: ForgotPasswordRequest,
     db: Session = Depends(get_db)
 ):
+    # Try to find user by email first (backward compatibility)
     user = db.query(User).filter(User.email == request.email).first()
     
+    # If not found by email, try as mobile number
     if not user:
-        # Don't reveal if email exists
-        return ForgotPasswordResponse(message="If the email exists, a reset link has been sent")
+        user = db.query(User).filter(User.mobile == request.email).first()
     
-    # TODO: Implement email sending
-    return ForgotPasswordResponse(message="If the email exists, a reset link has been sent")
+    # If still not found and it's numeric, try as user ID
+    if not user and request.email.isdigit():
+        try:
+            user_id = int(request.email)
+            user = db.query(User).filter(User.id == user_id).first()
+        except ValueError:
+            pass
+    
+    if not user:
+        # Don't reveal if user exists (security best practice)
+        return ForgotPasswordResponse(message="If your account exists, a password reset code has been sent.")
+    
+    # Telegram OTP Flow (prioritize Telegram if linked)
+    if user.telegram_chat_id:
+        from app.services.telegram_notification_service import TelegramNotificationService
+        notification_service = TelegramNotificationService()
+        
+        # Generate OTP (stores in memory)
+        otp = notification_service.generate_otp(user.mobile)
+        
+        # Send OTP with professional formatting
+        message = (
+            f"🔐 <b>Password Reset Request</b>\n\n"
+            f"Hello <b>{user.username}</b>,\n\n"
+            f"Your password reset OTP is: <code>{otp}</code>\n\n"
+            f"⏰ This code is valid for <b>5 minutes</b>.\n"
+            f"⚠️ If you didn't request this, please ignore this message.\n\n"
+            f"— Rubik Analytics Security Team"
+        )
+        
+        await notification_service.bot_service.send_message(user.telegram_chat_id, message)
+        
+        return ForgotPasswordResponse(message="A password reset code has been sent to your Telegram account.")
+    
+    # TODO: Implement email sending for users without Telegram
+    return ForgotPasswordResponse(message="If your account exists, a password reset code has been sent.")
+
+@router.post("/reset-password", response_model=ResetPasswordResponse)
+async def reset_password(
+    request: ResetPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """Reset password using OTP received via Telegram"""
+    
+    # Find user by identifier (same logic as forgot password)
+    user = db.query(User).filter(User.email == request.identifier).first()
+    
+    if not user:
+        user = db.query(User).filter(User.mobile == request.identifier).first()
+    
+    if not user and request.identifier.isdigit():
+        try:
+            user_id = int(request.identifier)
+            user = db.query(User).filter(User.id == user_id).first()
+        except ValueError:
+            pass
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+   # Verify OTP
+    from app.services.telegram_notification_service import TelegramNotificationService
+    notification_service = TelegramNotificationService()
+    
+    if not notification_service.verify_otp(user.mobile, request.otp):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OTP"
+        )
+    
+    # Update password
+    user.hashed_password = get_password_hash(request.new_password)
+    user.updated_at = datetime.utcnow()
+    db.commit()
+    
+    # Send confirmation to Telegram
+    if user.telegram_chat_id:
+        try:
+            now = datetime.now().strftime("%d-%b-%Y %I:%M %p")
+            message = (
+                f"✅ <b>Password Reset Successful</b>\n\n"
+                f"Hello <b>{user.username}</b>,\n\n"
+                f"Your password has been successfully reset.\n\n"
+                f"🕐 Time: <code>{now}</code>\n\n"
+                f"⚠️ If you didn't make this change, contact support immediately.\n\n"
+                f"— Rubik Analytics Security Team"
+            )
+            await notification_service.bot_service.send_message(user.telegram_chat_id, message)
+        except Exception as e:
+            print(f"Failed to send password reset confirmation: {e}")
+    
+    return ResetPasswordResponse(message="Password reset successfully")
 
 @router.post("/refresh")
 async def refresh_token(

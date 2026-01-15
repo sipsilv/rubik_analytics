@@ -28,7 +28,7 @@ export default function RequestsFeedbackPage() {
     // Prevent double call in React Strict Mode
     if (hasLoadedRef.current) return
     hasLoadedRef.current = true
-    
+
     loadStats()
     loadUnifiedStats()
   }, [])
@@ -40,7 +40,7 @@ export default function RequestsFeedbackPage() {
       const approved = allRequests.filter((r: any) => r.status === 'approved' || r.status === 'APPROVED').length
       const rejected = allRequests.filter((r: any) => r.status === 'rejected' || r.status === 'REJECTED').length
       const pending = allRequests.filter((r: any) => r.status === 'pending' || r.status === 'PENDING').length
-      
+
       setRequestsStats({
         total,
         approved,
@@ -63,7 +63,7 @@ export default function RequestsFeedbackPage() {
       const totalFR = featureRequests.length || 0
       const totalFB = feedback.length || 0
       const total = totalFR + totalFB
-      
+
       const pending = [
         ...featureRequests.filter((fr: any) => fr.status === 'pending'),
         ...feedback.filter((fb: any) => fb.status === 'open' || fb.status === 'pending')
@@ -101,10 +101,10 @@ export default function RequestsFeedbackPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="flex flex-wrap justify-center gap-6 items-stretch">
         {/* Access Request Card */}
-        <Card className="hover:shadow-lg hover:border-primary/30 transition-all duration-200 h-full border-2">
-          <div className="p-6">
+        <Card className="hover:shadow-lg hover:border-primary/30 transition-all duration-200 border-2 w-full max-w-sm">
+          <div className="p-6 flex flex-col h-full">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-primary/10 dark:bg-[#3b82f6]/20 rounded-xl">
@@ -120,7 +120,7 @@ export default function RequestsFeedbackPage() {
                 </div>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4 mb-6">
               <button
                 onClick={(e) => {
@@ -214,13 +214,13 @@ export default function RequestsFeedbackPage() {
                 </div>
               </button>
             </div>
-            
+
             <p className="text-sm font-sans text-text-secondary dark:text-[#9ca3af] mb-4">
               Review and approve or reject new user access requests. Manage user onboarding and access control.
             </p>
-            <Button 
-              variant="primary" 
-              size="sm" 
+            <Button
+              variant="primary"
+              size="sm"
               className="w-full"
               onClick={(e) => {
                 e.preventDefault()
@@ -236,8 +236,8 @@ export default function RequestsFeedbackPage() {
         </Card>
 
         {/* Feature Request & Feedback Card */}
-        <Card className="hover:shadow-lg hover:border-success/30 transition-all duration-200 h-full border-2">
-          <div className="p-6">
+        <Card className="hover:shadow-lg hover:border-success/30 transition-all duration-200 border-2 w-full max-w-sm">
+          <div className="p-6 flex flex-col h-full">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-success/10 dark:bg-[#10b981]/20 rounded-xl">
@@ -253,7 +253,7 @@ export default function RequestsFeedbackPage() {
                 </div>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="text-center p-4 bg-background/50 dark:bg-[#121b2f]/50 rounded-lg border border-border">
                 <div className="text-3xl font-bold font-sans text-text-primary dark:text-[#e5e7eb] mb-1">
@@ -291,13 +291,13 @@ export default function RequestsFeedbackPage() {
                 </div>
               </div>
             </div>
-            
+
             <p className="text-sm font-sans text-text-secondary dark:text-[#9ca3af] mb-4">
               View and manage feature requests and feedback submitted by users. Track suggestions and improvements.
             </p>
-            <Button 
-              variant="primary" 
-              size="sm" 
+            <Button
+              variant="primary"
+              size="sm"
               className="w-full"
               onClick={(e) => {
                 e.preventDefault()

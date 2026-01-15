@@ -137,9 +137,108 @@ class UserStatusUpdate(BaseModel):
     status: str
     reason: Optional[str] = None
 
+class AdminMessage(BaseModel):
+    message: str
+
 router = APIRouter()
 
 # User Management
+@router.post("/users/{user_id}/message")
+async def send_user_message(
+    user_id: int,
+    message_data: AdminMessage,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Send a custom Telegram message to a user"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if not user.telegram_chat_id:
+        raise HTTPException(status_code=400, detail="User has not connected Telegram")
+        
+    try:
+        from app.services.telegram_notification_service import TelegramNotificationService
+        from app.models.telegram_message import TelegramMessage
+        ns = TelegramNotificationService()
+        
+        # Format message with Admin context
+        formatted_message = (
+            f"📩 <b>Message from Admin ({admin.username})</b>\n\n"
+            f"{message_data.message}\n\n"
+            f"— Rubik Analytics Support"
+        )
+        
+        await ns.bot_service.send_message(user.telegram_chat_id, formatted_message)
+        
+        # Store message in database
+        msg = TelegramMessage(
+            user_id=user.id,
+            chat_id=user.telegram_chat_id,
+            message_text=message_data.message,
+            from_user=False,
+            admin_username=admin.username,
+            is_read=True  # Admin messages are considered read
+        )
+        db.add(msg)
+        db.commit()
+        
+        return {"message": "Message sent successfully"}
+    except Exception as e:
+        print(f"[ADMIN] Failed to send message: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
+
+@router.get("/users/{user_id}/messages")
+async def get_user_messages(
+    user_id: int,
+    limit: int = 50,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get message history for a user"""
+    from app.models.telegram_message import TelegramMessage
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    messages = (
+        db.query(TelegramMessage)
+        .filter(TelegramMessage.user_id == user_id)
+        .order_by(TelegramMessage.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    
+    # Mark unread messages as read
+    unread_count = (
+        db.query(TelegramMessage)
+        .filter(
+            TelegramMessage.user_id == user_id,
+            TelegramMessage.is_read == False,
+            TelegramMessage.from_user == True
+        )
+        .update({"is_read": True})
+    )
+    db.commit()
+    
+    return {
+        "messages": [
+            {
+                "id": msg.id,
+                "message_text": msg.message_text,
+                "from_user": msg.from_user,
+                "admin_username": msg.admin_username,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                "is_read": msg.is_read
+            }
+            for msg in reversed(messages)  # Show oldest first
+        ],
+        "unread_count": unread_count
+    }
+
+
 @router.get("/users", response_model=List[UserResponse])
 async def get_users(
     admin: User = Depends(get_admin_user),
@@ -199,7 +298,8 @@ async def get_users(
             "updated_at": user.updated_at,
             "last_seen": user.last_seen,
             "last_active_at": user.last_active_at,
-            "is_online": is_online
+            "is_online": is_online,
+            "telegram_chat_id": user.telegram_chat_id
         }
         result.append(UserResponse(**user_dict))
     
@@ -246,7 +346,8 @@ async def get_user(
         "updated_at": user.updated_at,
         "last_seen": user.last_seen,
         "last_active_at": user.last_active_at,
-        "is_online": is_online
+        "is_online": is_online,
+        "telegram_chat_id": user.telegram_chat_id
     }
     return UserResponse(**user_dict)
 
@@ -402,6 +503,13 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Track changes for notification
+    changes_detail = []
+    old_name = user.name
+    old_email = user.email
+    old_mobile = user.mobile
+    old_role = user.role
+    
     # CRITICAL: Cannot modify super_admin
     user_role_lower = user.role.lower() if user.role else ""
     if user_role_lower == "super_admin" and admin.id != user.id:
@@ -411,6 +519,8 @@ async def update_user(
     
     # Update name if provided
     if user_data.name is not None:
+        if old_name != user_data.name:
+            changes_detail.append(f"Name: {old_name or 'None'} → {user_data.name}")
         user.name = user_data.name
     
     # Update email if provided
@@ -419,6 +529,8 @@ async def update_user(
             existing = db.query(User).filter(User.email == user_data.email, User.id != user_id).first()
             if existing:
                 raise HTTPException(status_code=400, detail="Email already exists")
+        if old_email != user_data.email:
+            changes_detail.append(f"Email: {old_email or 'None'} → {user_data.email}")
         user.email = user_data.email
     
     # Update mobile if provided
@@ -428,6 +540,8 @@ async def update_user(
         existing = db.query(User).filter(User.mobile == user_data.mobile, User.id != user_id).first()
         if existing:
             raise HTTPException(status_code=400, detail="Mobile number already exists")
+        if old_mobile != user_data.mobile:
+            changes_detail.append(f"Mobile: {old_mobile or 'None'} → {user_data.mobile}")
         user.mobile = user_data.mobile
     
     # Update updated_at timestamp
@@ -465,12 +579,37 @@ async def update_user(
                 detail="Role must be 'user' or 'admin'"
             )
         
+        if old_role != new_role_lower:
+            changes_detail.append(f"Role: {old_role} → {new_role_lower}")
         user.role = new_role_lower
         print(f"[ADMIN] Role changed for user {user.username} to {new_role_lower} by {admin.username}")
     
     user.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(user)
+
+    # Notify user via Telegram with detailed changes (Fail Silent)
+    if user.telegram_chat_id and changes_detail:
+        try:
+            from app.services.telegram_notification_service import TelegramNotificationService
+            ns = TelegramNotificationService()
+            
+            # Build detailed change list
+            changes_text = "\n".join([f"• {change}" for change in changes_detail])
+            
+            msg = (
+                f"📝 <b>Profile Updated by Admin</b>\n\n"
+                f"Hello <b>{user.username}</b>,\n\n"
+                f"Your profile has been updated by administrator <b>{admin.username}</b>.\n\n"
+                f"<b>Changes made:</b>\n"
+                f"{changes_text}\n\n"
+                f"⚠️ If you have concerns about these changes, contact support.\n\n"
+                f"— Rubik Analytics"
+            )
+            await ns.send_info_notification(user, msg)
+        except Exception as e:
+            print(f"[ADMIN] Failed to send Telegram notification: {e}")
+
     return user
 
 @router.delete("/users/{user_id}")
@@ -617,6 +756,19 @@ async def update_user_status(
         ip_address=request.client.host if request else None
     )
     
+    # Notify user via Telegram (Fail Silent)
+    if user.telegram_chat_id:
+        try:
+            from app.services.telegram_notification_service import TelegramNotificationService
+            ns = TelegramNotificationService()
+            status_emoji = "✅" if new_status == "ACTIVE" else "⛔"
+            msg = f"{status_emoji} <b>Account Status Update</b>\n\nYour account status is now: <b>{new_status}</b>."
+            if status_data.reason:
+                msg += f"\nReason: {status_data.reason}"
+            await ns.send_info_notification(user, msg)
+        except Exception as e:
+            print(f"[ADMIN] Failed to send Telegram notification: {e}")
+
     return user
 
 @router.patch("/users/{user_id}/change-password", response_model=UserResponse)

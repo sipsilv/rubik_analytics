@@ -21,3 +21,5 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     last_seen = Column(DateTime(timezone=True), nullable=True)
     last_active_at = Column(DateTime(timezone=True), nullable=True)  # For live status tracking
+    telegram_chat_id = Column(String, nullable=True)  # Telegram Chat ID for OTP/Alerts
+    two_factor_enabled = Column(Boolean, default=False, nullable=False)  # Enable 2FA via Telegram

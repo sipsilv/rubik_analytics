@@ -32,7 +32,7 @@ def get_announcements_db_path() -> str:
 def get_db_connection():
     """Get DuckDB connection for corporate announcements"""
     db_path = get_announcements_db_path()
-    conn = duckdb.connect(db_path)
+    conn = duckdb.connect(db_path, config={'allow_unsigned_extensions': True})
     # Set consistent configuration to avoid connection conflicts
     conn.execute("PRAGMA enable_progress_bar=false")
     return conn
@@ -55,7 +55,7 @@ def init_announcements_database():
         conn = None
         try:
             # Try to connect with a timeout to avoid hanging on locked files
-            conn = duckdb.connect(db_path)
+            conn = duckdb.connect(db_path, config={'allow_unsigned_extensions': True})
             # Set consistent configuration
             conn.execute("PRAGMA enable_progress_bar=false")
             
@@ -206,7 +206,7 @@ class AnnouncementsService:
     def _get_conn(self):
         """Get database connection - always create new connection and close it after use"""
         try:
-            conn = duckdb.connect(self.db_path)
+            conn = duckdb.connect(self.db_path, config={'allow_unsigned_extensions': True})
             # Set consistent configuration to avoid connection conflicts
             conn.execute("PRAGMA enable_progress_bar=false")
             return conn
@@ -217,7 +217,7 @@ class AnnouncementsService:
             _initialized = False
             init_announcements_database()
             # Retry connection
-            conn = duckdb.connect(self.db_path)
+            conn = duckdb.connect(self.db_path, config={'allow_unsigned_extensions': True})
             conn.execute("PRAGMA enable_progress_bar=false")
             return conn
     

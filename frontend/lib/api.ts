@@ -43,10 +43,17 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      Cookies.remove('auth_token')
-      Cookies.remove('user')
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login'
+      // Don't redirect if we're already on login page (to handle OTP flow)
+      // or if it's the specific OTP required error
+      const isOtpError = error.response.data?.detail?.includes('OTP')
+      const isLoginPage = typeof window !== 'undefined' && window.location.pathname === '/login'
+
+      if (!isOtpError && !isLoginPage) {
+        Cookies.remove('auth_token')
+        Cookies.remove('user')
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login'
+        }
       }
     }
 
@@ -81,8 +88,8 @@ export default api
 
 // Auth API
 export const authAPI = {
-  login: async (identifier: string, password: string) => {
-    const response = await api.post('/auth/login', { identifier, password })
+  login: async (identifier: string, password: string, otp?: string) => {
+    const response = await api.post('/auth/login', { identifier, password, otp })
     return response.data
   },
   logout: async () => {
@@ -92,6 +99,14 @@ export const authAPI = {
   },
   forgotPassword: async (email: string) => {
     const response = await api.post('/auth/forgot-password', { email })
+    return response.data
+  },
+  resetPassword: async (identifier: string, otp: string, newPassword: string) => {
+    const response = await api.post('/auth/reset-password', {
+      identifier,
+      otp,
+      new_password: newPassword
+    })
     return response.data
   },
   refreshToken: async () => {
@@ -172,6 +187,10 @@ export const userAPI = {
     const response = await api.post('/users/me/ping')
     return response.data
   },
+  disconnectTelegram: async () => {
+    const response = await api.delete('/telegram/disconnect')
+    return response.data
+  },
 }
 
 // Admin API
@@ -204,6 +223,15 @@ export const adminAPI = {
   updateUserStatus: async (id: string, status: string, reason?: string) => {
     const response = await api.patch(`/admin/users/${id}/status`, { status, reason })
     return response.data
+  },
+  sendMessage: (userId: string, message: string) => {
+    const response = api.post(`/admin/users/${userId}/message`, { message })
+    return response.then(res => res.data)
+  },
+  getMessages: (userId: string, limit?: number) => {
+    const params = limit ? { limit } : {}
+    const response = api.get(`/admin/users/${userId}/messages`, { params })
+    return response.then(res => res.data)
   },
   toggleUserStatus: async (id: string) => {
     // Get current user first to check status, then toggle
@@ -323,6 +351,59 @@ export const adminAPI = {
 
 
 
+// Telegram API
+export const telegramAPI = {
+  requestOtp: async (apiId: string, apiHash: string, phone: string) => {
+    const response = await api.post('/telegram/request-otp', {
+      api_id: parseInt(apiId),
+      api_hash: apiHash,
+      phone
+    })
+    return response.data
+  },
+  verifyOtp: async (apiId: string, apiHash: string, phone: string, code: string, phoneCodeHash: string, sessionString: string, password?: string) => {
+    const response = await api.post('/telegram/verify-otp', {
+      api_id: parseInt(apiId),
+      api_hash: apiHash,
+      phone,
+      code,
+      phone_code_hash: phoneCodeHash,
+      session_string: sessionString,
+      password
+    })
+    return response.data
+    return response.data
+  }
+}
+
+// Telegram Channels API
+export const telegramChannelsAPI = {
+  discoverChannels: async (connectionId: number) => {
+    const response = await api.get(`/telegram-channels/discover/${connectionId}`)
+    return response.data
+  },
+  registerChannels: async (connectionId: number, channels: any[]) => {
+    const response = await api.post(`/telegram-channels/${connectionId}/register`, { channels })
+    return response.data
+  },
+  getChannels: async (connectionId: number) => {
+    const response = await api.get(`/telegram-channels/list/${connectionId}`)
+    return response.data
+  },
+  toggleChannel: async (channelId: number, isEnabled: boolean) => {
+    const response = await api.patch(`/telegram-channels/${channelId}/toggle`, { is_enabled: isEnabled })
+    return response.data
+  },
+  searchChannels: async (connectionId: number, query: string) => {
+    const response = await api.get(`/telegram-channels/search/${connectionId}`, { params: { q: query } })
+    return response.data
+  },
+  deleteChannel: async (channelId: number) => {
+    const response = await api.delete(`/telegram-channels/${channelId}`)
+    return response.data
+  }
+}
+
 // Symbols API
 export const symbolsAPI = {
   getStats: async () => {
@@ -350,7 +431,7 @@ export const symbolsAPI = {
       const data = response.data || {}
       const pagination = data.pagination || {}
       const logs = data.logs || []
-      
+
       console.log('[API] Upload logs response:', {
         status: response.status,
         has_data: !!data,

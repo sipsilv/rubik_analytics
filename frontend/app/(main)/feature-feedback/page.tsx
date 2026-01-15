@@ -34,7 +34,7 @@ export default function FeatureFeedbackPage() {
         adminAPI.getFeedback().catch(() => [])
       ])
 
-      const userFeedback = allFeedback.filter((fb: any) => 
+      const userFeedback = allFeedback.filter((fb: any) =>
         fb.user_id === user?.id || fb.user_id?.toString() === user?.id?.toString()
       )
 
@@ -42,27 +42,27 @@ export default function FeatureFeedbackPage() {
       const totalFB = userFeedback.length || 0
       const total = totalFR + totalFB
 
-      const pendingFR = featureRequests.filter((fr: any) => 
+      const pendingFR = featureRequests.filter((fr: any) =>
         fr.status === 'pending' || fr.status === 'in_review'
       ).length
-      const pendingFB = userFeedback.filter((fb: any) => 
+      const pendingFB = userFeedback.filter((fb: any) =>
         fb.status === 'open' || fb.status === 'pending'
       ).length
       const pending = pendingFR + pendingFB
 
-      const rejected = featureRequests.filter((fr: any) => 
+      const rejected = featureRequests.filter((fr: any) =>
         fr.status === 'rejected'
-      ).length + userFeedback.filter((fb: any) => 
+      ).length + userFeedback.filter((fb: any) =>
         fb.status === 'rejected'
       ).length
 
-      const inProgress = featureRequests.filter((fr: any) => 
+      const inProgress = featureRequests.filter((fr: any) =>
         fr.status === 'in_review' || fr.status === 'in_progress'
-      ).length + userFeedback.filter((fb: any) => 
+      ).length + userFeedback.filter((fb: any) =>
         fb.status === 'in_progress'
       ).length
 
-      const resolved = userFeedback.filter((fb: any) => 
+      const resolved = userFeedback.filter((fb: any) =>
         fb.status === 'resolved'
       ).length
 
@@ -93,9 +93,9 @@ export default function FeatureFeedbackPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="hover:shadow-lg hover:border-primary/30 transition-all duration-200 h-full border-2">
-          <div className="p-6">
+      <div className="flex flex-wrap justify-center gap-6 items-stretch">
+        <Card className="hover:shadow-lg hover:border-primary/30 transition-all duration-200 border-2 w-full max-w-sm">
+          <div className="p-6 flex flex-col h-full">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -112,7 +112,7 @@ export default function FeatureFeedbackPage() {
                 </div>
               </div>
             </div>
-              
+
             {/* Stats Grid - 2x2 */}
             {loading ? (
               <div className="py-8 text-center text-text-secondary">Loading...</div>
@@ -159,13 +159,13 @@ export default function FeatureFeedbackPage() {
                 </div>
               </div>
             )}
-              
+
             <p className="text-sm font-sans text-text-secondary dark:text-[#9ca3af] mb-4">
               Submit feedback about the platform, report issues, or request new features and improvements. Our AI will analyze feature requests to help prioritize development.
             </p>
-            <Button 
-              variant="primary" 
-              size="sm" 
+            <Button
+              variant="primary"
+              size="sm"
               className="w-full"
               onClick={(e) => {
                 e.preventDefault()

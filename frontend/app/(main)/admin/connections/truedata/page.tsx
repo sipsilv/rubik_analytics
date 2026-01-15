@@ -15,7 +15,7 @@ export default function TrueDataPage() {
   const router = useRouter()
   const [connection, setConnection] = useState<any>(null)
   const [tokenInfo, setTokenInfo] = useState<any>(null)
-  const [websocketStatus, setWebsocketStatus] = useState<{running: boolean, connected: boolean} | null>(null)
+  const [websocketStatus, setWebsocketStatus] = useState<{ running: boolean, connected: boolean } | null>(null)
   const [loading, setLoading] = useState(true)
   const [countdown, setCountdown] = useState<string>('--:--:--')
   const [countdownColor, setCountdownColor] = useState<'green' | 'orange' | 'red'>('green')
@@ -38,7 +38,7 @@ export default function TrueDataPage() {
     try {
       // Parse the date string - backend sends IST format (e.g., "2026-01-03T04:00:00+05:30")
       const date = new Date(dateString)
-      
+
       // Use Intl.DateTimeFormat to format in IST timezone explicitly
       // This ensures the time is displayed correctly regardless of browser timezone
       const formatter = new Intl.DateTimeFormat('en-IN', {
@@ -51,7 +51,7 @@ export default function TrueDataPage() {
         second: '2-digit',
         hour12: false
       })
-      
+
       // Format the date parts
       const parts = formatter.formatToParts(date)
       const day = parts.find(p => p.type === 'day')?.value.padStart(2, '0') || '00'
@@ -60,7 +60,7 @@ export default function TrueDataPage() {
       const hours = parts.find(p => p.type === 'hour')?.value.padStart(2, '0') || '00'
       const minutes = parts.find(p => p.type === 'minute')?.value.padStart(2, '0') || '00'
       const seconds = parts.find(p => p.type === 'second')?.value.padStart(2, '0') || '00'
-      
+
       return `${day} ${month} ${year}, ${hours}:${minutes}:${seconds} IST`
     } catch (e) {
       // If parsing fails, try to extract time from ISO string directly
@@ -98,6 +98,20 @@ export default function TrueDataPage() {
     }
   }, [connection])
 
+  // Auto-refresh WebSocket status every 10 seconds when connection exists
+  useEffect(() => {
+    if (!connection) return
+
+    loadWebSocketStatus() // Load immediately
+    const wsStatusInterval = setInterval(() => {
+      loadWebSocketStatus()
+    }, 10000)
+
+    return () => {
+      clearInterval(wsStatusInterval)
+    }
+  }, [connection])
+
   const loadConnection = async () => {
     try {
       setLoading(true)
@@ -107,7 +121,7 @@ export default function TrueDataPage() {
         const provider = c.provider.toUpperCase().replace(/\s+/g, '').replace(/[_-]/g, '')
         return provider === 'TRUEDATA' || provider.includes('TRUEDATA')
       })
-      
+
       // Debug logging
       console.log('[TrueData Page] All connections:', connections.map((c: any) => ({
         id: c.id,
@@ -116,7 +130,7 @@ export default function TrueDataPage() {
         type: c.connection_type
       })))
       console.log('[TrueData Page] TrueData connection found:', truedata)
-      
+
       if (truedata) {
         setConnection(truedata)
         await loadTokenStatus(truedata.id)
@@ -155,7 +169,7 @@ export default function TrueDataPage() {
       console.log('[TrueData] Loading token status for connection:', connectionId)
       const response = await adminAPI.getTokenStatus(String(connectionId))
       console.log('[TrueData] Token status response:', response)
-      
+
       // Handle standardized response format
       if (response.token_status) {
         // Map standardized response to frontend format
@@ -174,14 +188,14 @@ export default function TrueDataPage() {
           refresh_before_minutes: 0, // Refresh happens after expiry, not before
           next_auto_refresh_at: response.next_auto_refresh_at // Next 4:00 AM IST when token will auto-refresh
         })
-        
+
         console.log('[TrueData] Token status loaded:', {
           token_status: response.token_status,
           seconds_left: response.seconds_left,
           expires_at: response.expires_at,
           expires_at_ist: response.expires_at_ist
         })
-        
+
         // Fetch actual token value if token is active
         if (response.token_status === 'ACTIVE') {
           try {
@@ -216,7 +230,7 @@ export default function TrueDataPage() {
 
   const handleCopyToken = async () => {
     if (!tokenValue) return
-    
+
     try {
       await navigator.clipboard.writeText(tokenValue)
       setCopied(true)
@@ -250,13 +264,13 @@ export default function TrueDataPage() {
       try {
         // Get latest tokenInfo from ref (may have been updated by polling)
         const currentTokenInfo = tokenInfoRef.current
-        
+
         if (!currentTokenInfo || currentTokenInfo.seconds_left === undefined || currentTokenInfo.seconds_left === null) {
           setCountdown('--:--:--')
           setCountdownColor('green')
           return
         }
-        
+
         // If backend provided new seconds_left (from polling), reset to authoritative value
         // This is the ONLY way to update the countdown - backend is authoritative
         if (currentTokenInfo.seconds_left !== lastBackendSeconds) {
@@ -302,7 +316,7 @@ export default function TrueDataPage() {
 
     // Update immediately
     updateCountdown()
-    
+
     // Update every second (decrement timer)
     const interval = setInterval(updateCountdown, 1000)
 
@@ -315,7 +329,7 @@ export default function TrueDataPage() {
 
   const handleToggle = async () => {
     if (!connection?.id) return
-    
+
     setLoading(true)
     try {
       await adminAPI.toggleConnection(String(connection.id))
@@ -330,33 +344,32 @@ export default function TrueDataPage() {
 
   const handleRefreshToken = async () => {
     if (!connection?.id) return
-    
+
     // Prevent multiple simultaneous refresh calls
     if (refreshInProgress.current) {
       console.log('[TrueData] Refresh already in progress, skipping...')
       return
     }
-    
+
     setIsRefreshOpen(false)
     refreshInProgress.current = true
     setRefreshing(true)
     setLoading(true)
-    
+
     try {
       console.log('[TrueData] Refreshing token for connection:', connection.id)
       const response = await adminAPI.refreshToken(String(connection.id))
       console.log('[TrueData] Token refresh response:', response)
-      
+
       await loadConnection() // Reload connection to get updated status
       await loadTokenStatus(connection.id)
       await loadWebSocketStatus() // Refresh WebSocket status
-      
       // Show success message in modal (refresh always generates a new token)
       setSuccessMessage(response.message || 'Token refreshed successfully!')
       setIsSuccessOpen(true)
     } catch (error: any) {
       console.error('[TrueData] Error refreshing token:', error)
-      
+
       // Extract error message
       let errorMessage = 'Failed to refresh token'
       if (error?.response?.data?.detail) {
@@ -364,7 +377,7 @@ export default function TrueDataPage() {
       } else if (error?.message) {
         errorMessage = error.message
       }
-      
+
       // Show error to user in modal
       setSuccessMessage(`Error: ${errorMessage}`)
       setIsSuccessOpen(true)
@@ -377,7 +390,7 @@ export default function TrueDataPage() {
 
   const handleDelete = async () => {
     if (!connection?.id) return
-    
+
     setDeleting(true)
     try {
       // Delete token from storage
@@ -386,7 +399,7 @@ export default function TrueDataPage() {
       } catch (error) {
         console.error('Error deleting connection:', error)
       }
-      
+
       // Navigate back to connections page
       router.push('/admin/connections')
     } catch (error) {
@@ -424,7 +437,7 @@ export default function TrueDataPage() {
             </p>
           </div>
         </div>
-        
+
         <div className="flex items-center justify-between">
           <div></div>
           <Button size="sm" onClick={() => setIsEditOpen(true)}>
@@ -479,7 +492,7 @@ export default function TrueDataPage() {
           Master Token Provider
         </p>
       </div>
-      
+
       <div className="flex items-center justify-between">
         <div></div>
         <div className="flex gap-2">
@@ -495,10 +508,10 @@ export default function TrueDataPage() {
             }}
             disabled={loading}
           />
-          <Button 
-            variant="secondary" 
-            size="sm" 
-            onClick={() => setIsRefreshOpen(true)} 
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setIsRefreshOpen(true)}
             disabled={loading || refreshing || !connection.is_enabled}
           >
             <RefreshCw className={`w-4 h-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} />
@@ -508,9 +521,9 @@ export default function TrueDataPage() {
             <Settings className="w-4 h-4 mr-1" />
             Configure
           </Button>
-          <Button 
-            size="sm" 
-            variant="danger" 
+          <Button
+            size="sm"
+            variant="danger"
             onClick={() => setIsDeleteOpen(true)}
           >
             <Trash2 className="w-4 h-4 mr-1" />
@@ -542,11 +555,10 @@ export default function TrueDataPage() {
               <tr className="hover:bg-background/50 transition-colors">
                 <td className="py-3 px-4 text-sm font-sans font-medium text-text-secondary align-top">Connection Status</td>
                 <td className="py-3 px-4 align-top">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-sans font-semibold ${
-                    connection.status === 'CONNECTED' ? 'bg-success/10 text-success border border-success/20' :
-                    connection.status === 'DISCONNECTED' || connection.status === 'ERROR' ? 'bg-error/10 text-error border border-error/20' :
-                    'bg-text-secondary/10 text-text-secondary border border-text-secondary/20'
-                  }`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-sans font-semibold ${connection.status === 'CONNECTED' ? 'bg-success/10 text-success border border-success/20' :
+                      connection.status === 'DISCONNECTED' || connection.status === 'ERROR' ? 'bg-error/10 text-error border border-error/20' :
+                        'bg-text-secondary/10 text-text-secondary border border-text-secondary/20'
+                    }`}>
                     {connection.status}
                   </span>
                 </td>
@@ -608,22 +620,21 @@ export default function TrueDataPage() {
                   <td className="py-3 px-4 align-top">
                     {websocketStatus ? (
                       <div className="flex items-center gap-3">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-sans font-semibold ${
-                          websocketStatus.connected 
-                            ? 'bg-success/10 text-success border border-success/20' 
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-sans font-semibold ${websocketStatus.connected
+                            ? 'bg-success/10 text-success border border-success/20'
                             : websocketStatus.running
-                            ? 'bg-warning/10 text-warning border border-warning/20'
-                            : 'bg-error/10 text-error border border-error/20'
-                        }`}>
+                              ? 'bg-warning/10 text-warning border border-warning/20'
+                              : 'bg-error/10 text-error border border-error/20'
+                          }`}>
                           {websocketStatus.connected ? 'Connected' : websocketStatus.running ? 'Running' : 'Disconnected'}
                         </span>
-                        <span className="text-xs font-sans text-text-secondary">
-                          {websocketStatus.connected 
-                            ? 'Receiving live announcements' 
-                            : websocketStatus.running
-                            ? 'Service running but not connected'
-                            : 'Not connected'}
-                        </span>
+                        {(websocketStatus.connected || websocketStatus.running) && (
+                          <span className="text-xs font-sans text-text-secondary">
+                            {websocketStatus.connected
+                              ? 'Receiving live announcements'
+                              : 'Service running but not connected'}
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <span className="text-sm font-sans text-text-secondary">Loading...</span>
@@ -638,20 +649,19 @@ export default function TrueDataPage() {
                 <td className="py-3 px-4 align-top">
                   {tokenInfo ? (
                     <div className="flex items-center gap-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-sans font-semibold ${
-                        tokenInfo.token_status === 'EXPIRED' || tokenInfo.is_expired
-                          ? 'bg-error/10 text-error border border-error/20' 
-                          : tokenInfo.token_status === 'ERROR'
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-sans font-semibold ${tokenInfo.token_status === 'EXPIRED' || tokenInfo.is_expired
                           ? 'bg-error/10 text-error border border-error/20'
-                          : tokenInfo.token_status === 'ACTIVE'
-                          ? 'bg-success/10 text-success border border-success/20'
-                          : 'bg-text-secondary/10 text-text-secondary border border-text-secondary/20'
-                      }`}>
-                        {tokenInfo.token_status === 'EXPIRED' ? 'Expired' : 
-                         tokenInfo.token_status === 'ERROR' ? 'Error' :
-                         tokenInfo.token_status === 'ACTIVE' ? 'Active' :
-                         tokenInfo.token_status === 'NOT_GENERATED' ? 'Not Generated' :
-                         'Unknown'}
+                          : tokenInfo.token_status === 'ERROR'
+                            ? 'bg-error/10 text-error border border-error/20'
+                            : tokenInfo.token_status === 'ACTIVE'
+                              ? 'bg-success/10 text-success border border-success/20'
+                              : 'bg-text-secondary/10 text-text-secondary border border-text-secondary/20'
+                        }`}>
+                        {tokenInfo.token_status === 'EXPIRED' ? 'Expired' :
+                          tokenInfo.token_status === 'ERROR' ? 'Error' :
+                            tokenInfo.token_status === 'ACTIVE' ? 'Active' :
+                              tokenInfo.token_status === 'NOT_GENERATED' ? 'Not Generated' :
+                                'Unknown'}
                       </span>
                     </div>
                   ) : (
@@ -691,16 +701,14 @@ export default function TrueDataPage() {
                 <td className="py-4 px-4 align-top">
                   {tokenInfo && tokenInfo.seconds_left !== undefined && tokenInfo.seconds_left !== null ? (
                     <div className="flex items-center gap-3">
-                      <div className={`text-2xl font-mono font-bold tracking-wider ${
-                        countdownColor === 'red' ? 'text-error' :
-                        'text-success'
-                      }`}>
+                      <div className={`text-2xl font-mono font-bold tracking-wider ${countdownColor === 'red' ? 'text-error' :
+                          'text-success'
+                        }`}>
                         {countdown}
                       </div>
-                      <div className={`w-3 h-3 rounded-full ${
-                        countdownColor === 'red' ? 'bg-error animate-pulse' :
-                        'bg-success'
-                      }`}></div>
+                      <div className={`w-3 h-3 rounded-full ${countdownColor === 'red' ? 'bg-error animate-pulse' :
+                          'bg-success'
+                        }`}></div>
                     </div>
                   ) : (
                     <span className="text-sm font-sans text-text-secondary">--:--:--</span>
@@ -783,9 +791,9 @@ export default function TrueDataPage() {
             <Button variant="secondary" onClick={() => setIsRefreshOpen(false)} disabled={refreshing}>
               Cancel
             </Button>
-            <Button 
-              variant="primary" 
-              onClick={handleRefreshToken} 
+            <Button
+              variant="primary"
+              onClick={handleRefreshToken}
               disabled={refreshing}
             >
               {refreshing ? (
@@ -830,9 +838,9 @@ export default function TrueDataPage() {
             <Button variant="secondary" onClick={() => setIsDeleteOpen(false)} disabled={deleting}>
               Cancel
             </Button>
-            <Button 
-              variant="danger" 
-              onClick={handleDelete} 
+            <Button
+              variant="danger"
+              onClick={handleDelete}
               disabled={deleting}
             >
               {deleting ? 'Deleting...' : 'Delete'}
@@ -856,20 +864,17 @@ export default function TrueDataPage() {
             ) : (
               <Check className="w-6 h-6 text-success" />
             )}
-            <h3 className={`text-lg font-sans font-semibold ${
-              successMessage.startsWith('Error:') ? 'text-error' : 'text-success'
-            }`}>
+            <h3 className={`text-lg font-sans font-semibold ${successMessage.startsWith('Error:') ? 'text-error' : 'text-success'
+              }`}>
               {successMessage.startsWith('Error:') ? 'Error' : 'Success'}
             </h3>
           </div>
-          <div className={`rounded-lg p-4 ${
-            successMessage.startsWith('Error:') 
-              ? 'bg-error/10 border border-error/30' 
+          <div className={`rounded-lg p-4 ${successMessage.startsWith('Error:')
+              ? 'bg-error/10 border border-error/30'
               : 'bg-success/10 border border-success/30'
-          }`}>
-            <p className={`font-semibold mb-2 ${
-              successMessage.startsWith('Error:') ? 'text-error' : 'text-success'
             }`}>
+            <p className={`font-semibold mb-2 ${successMessage.startsWith('Error:') ? 'text-error' : 'text-success'
+              }`}>
               {successMessage.startsWith('Error:') ? 'Token Refresh Failed' : 'Token Refreshed'}
             </p>
             <p className="text-text-secondary">
@@ -877,8 +882,8 @@ export default function TrueDataPage() {
             </p>
           </div>
           <div className="flex justify-end gap-2 pt-4">
-            <Button 
-              variant="primary" 
+            <Button
+              variant="primary"
               onClick={() => setIsSuccessOpen(false)}
             >
               OK

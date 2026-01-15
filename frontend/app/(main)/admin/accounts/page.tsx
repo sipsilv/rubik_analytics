@@ -16,10 +16,11 @@ import { ChangePasswordModal } from '@/components/ChangePasswordModal'
 import { DeleteUserModal } from '@/components/DeleteUserModal'
 import { PromoteUserModal } from '@/components/PromoteUserModal'
 import { DemoteUserModal } from '@/components/DemoteUserModal'
+import { AdminChatModal } from '@/components/AdminChatModal'
 import { SecondaryModal } from '@/components/ui/Modal'
 import { getErrorMessage } from '@/lib/error-utils'
 import { useWebSocketStatus, UserStatusUpdate } from '@/lib/useWebSocket'
-import { Eye, Edit, Key, ArrowUp, ArrowDown, UserPlus, Trash2, AlertCircle, X, Search } from 'lucide-react'
+import { Eye, Edit, Key, ArrowUp, ArrowDown, UserPlus, Trash2, AlertCircle, X, Search, Send } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
 export default function AccountsPage() {
@@ -36,22 +37,51 @@ export default function AccountsPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [promoteModalOpen, setPromoteModalOpen] = useState(false)
   const [demoteModalOpen, setDemoteModalOpen] = useState(false)
+  const [messageModalOpen, setMessageModalOpen] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [showSelfDemoteAlert, setShowSelfDemoteAlert] = useState(false)
   const [errorModal, setErrorModal] = useState({ isOpen: false, message: '' })
   const isSuperAdmin = currentUser?.role === 'super_admin'
 
+  // Format date helper
+  const formatDateTime = (dateString: string | null | undefined): string => {
+    if (!dateString) return '-'
+    try {
+      // Handle Python naive UTC strings by appending Z if missing
+      // This ensures browser treats it as UTC, not local
+      const normalizedString = (!dateString.endsWith('Z') && !dateString.includes('+'))
+        ? dateString + 'Z'
+        : dateString
+
+      const date = new Date(normalizedString)
+      if (isNaN(date.getTime())) return dateString || '-'
+
+      return new Intl.DateTimeFormat('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Kolkata' // Explicitly force IST
+      }).format(date)
+    } catch (e) {
+      return dateString || '-'
+    }
+  }
+
   // WebSocket connection for real-time status updates
   const handleStatusUpdate = (update: UserStatusUpdate) => {
     console.log('[Accounts] Status update received:', update)
-    setUsers(prevUsers => 
-      prevUsers.map(user => 
-        user.id === update.user_id 
-          ? { 
-              ...user, 
-              is_online: update.is_online,
-              last_active_at: update.last_active_at || user.last_active_at
-            }
+    setUsers(prevUsers =>
+      prevUsers.map(user =>
+        user.id === update.user_id
+          ? {
+            ...user,
+            is_online: update.is_online,
+            last_active_at: update.last_active_at || user.last_active_at
+          }
           : user
       )
     )
@@ -65,20 +95,20 @@ export default function AccountsPage() {
     if (user.is_online !== undefined && user.is_online !== null) {
       return user.is_online ? 'LIVE' : 'OFFLINE'
     }
-    
+
     // Fallback: Check if user is currently logged in and active
     // A user is considered "logged in" (LIVE) if:
     // 1. Account is active (is_active === true)
     // 2. Has recent authenticated activity (last_active_at within last 5 minutes)
-    
+
     // First check: Account must be active
     if (!user.is_active) {
       return 'OFFLINE'
     }
-    
+
     const now = Date.now()
     const fiveMinutes = 5 * 60 * 1000 // 5 minutes
-    
+
     // Check last_active_at
     if (user.last_active_at) {
       try {
@@ -93,22 +123,22 @@ export default function AccountsPage() {
         console.error(`[Live Status] Error parsing last_active_at:`, error)
       }
     }
-    
+
     return 'OFFLINE'
   }
 
   useEffect(() => {
     loadUsers()
-    
+
     // Refresh status when page becomes visible (e.g., user switches back to tab)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         loadUsers()
       }
     }
-    
+
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
@@ -138,7 +168,7 @@ export default function AccountsPage() {
         has_last_seen: !!data[0].last_seen,
         has_last_active_at: !!data[0].last_active_at
       } : 'No users')
-      
+
       // Log super user details specifically
       const superUsers = data.filter((u: any) => u.role === 'super_admin')
       if (superUsers.length > 0) {
@@ -152,7 +182,7 @@ export default function AccountsPage() {
           status: getLiveStatus(u)
         })))
       }
-      
+
       setUsers(data)
     } catch (error) {
       console.error('Failed to load users:', error)
@@ -202,7 +232,7 @@ export default function AccountsPage() {
 
   const handleDemoteFromSuperAdmin = async () => {
     if (!selectedUser) return
-    
+
     // Check if user is trying to demote themselves
     if (currentUser?.id === selectedUser.id || currentUser?.user_id === selectedUser.user_id) {
       setDemoteModalOpen(false)
@@ -210,7 +240,7 @@ export default function AccountsPage() {
       // No auto-close - user must manually close
       return
     }
-    
+
     setActionLoading(true)
     try {
       const updated = await adminAPI.demoteFromSuperAdmin(String(selectedUser.id))
@@ -222,8 +252,8 @@ export default function AccountsPage() {
       console.error('Failed to demote user:', error)
       const errorMsg = getErrorMessage(error, 'Failed to demote user')
       // Check if error is about self-demotion
-      if (errorMsg.toLowerCase().includes('cannot demote yourself') || 
-          errorMsg.toLowerCase().includes('cannot demote yourself')) {
+      if (errorMsg.toLowerCase().includes('cannot demote yourself') ||
+        errorMsg.toLowerCase().includes('cannot demote yourself')) {
         setDemoteModalOpen(false)
         setShowSelfDemoteAlert(true)
         // No auto-close - user must manually close
@@ -321,8 +351,8 @@ export default function AccountsPage() {
               await loadUsers()
             }}
           />
-          <Button 
-            size="sm" 
+          <Button
+            size="sm"
             onClick={() => setCreateModalOpen(true)}
             variant="primary"
           >
@@ -382,6 +412,8 @@ export default function AccountsPage() {
               <TableHeaderCell>Role</TableHeaderCell>
               <TableHeaderCell>Status</TableHeaderCell>
               <TableHeaderCell>Live</TableHeaderCell>
+              <TableHeaderCell>Last Seen</TableHeaderCell>
+              <TableHeaderCell className="text-center w-[80px]">Telegram</TableHeaderCell>
               <TableHeaderCell className="text-right">Actions</TableHeaderCell>
             </TableHeader>
             <TableBody>
@@ -389,7 +421,7 @@ export default function AccountsPage() {
                 const liveStatus = getLiveStatus(user)
                 return (
                   <TableRow key={user?.user_id || user?.id || index} index={index}>
-                    <TableCell 
+                    <TableCell
                       className="font-sans text-xs text-text-primary dark:text-[#e5e7eb] font-medium min-w-[120px] whitespace-nowrap"
                     >
                       {user?.user_id || user?.id || 'N/A'}
@@ -406,36 +438,62 @@ export default function AccountsPage() {
                       <button
                         onClick={() => handleToggleStatus(user.id)}
                         disabled={user.role === 'super_admin'}
-                        className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-fast ${
-                          user.is_active ? 'bg-success' : 'bg-border'
-                        } ${
-                          user.role === 'super_admin' 
-                            ? 'opacity-50 cursor-not-allowed' 
+                        className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-fast ${user.is_active ? 'bg-success' : 'bg-border'
+                          } ${user.role === 'super_admin'
+                            ? 'opacity-50 cursor-not-allowed'
                             : 'cursor-pointer'
-                        }`}
+                          }`}
                         title={user.role === 'super_admin' ? 'Super User status cannot be toggled' : ''}
                       >
                         <span
-                          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform duration-fast ${
-                            user.is_active ? 'translate-x-3.5' : 'translate-x-0.5'
-                          }`}
+                          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform duration-fast ${user.is_active ? 'translate-x-3.5' : 'translate-x-0.5'
+                            }`}
                         />
                       </button>
                     </TableCell>
                     <TableCell>
-                      <span className={`text-[10px] font-sans px-1.5 py-0.5 rounded font-semibold uppercase ${
-                        liveStatus === 'LIVE'
-                          ? 'bg-green-500/10 text-green-600 dark:text-green-400' 
-                          : 'bg-text-muted/10 text-text-muted'
-                      }`}>
+                      <span className={`text-[10px] font-sans px-1.5 py-0.5 rounded font-semibold uppercase ${liveStatus === 'LIVE'
+                        ? 'bg-green-500/10 text-green-600 dark:text-green-400'
+                        : 'bg-text-muted/10 text-text-muted'
+                        }`}>
                         {liveStatus || 'OFFLINE'}
                       </span>
                     </TableCell>
                     <TableCell>
+                      <span className="font-mono text-xs text-text-secondary">
+                        {formatDateTime(user.last_active_at)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-center">
+                        {user.telegram_chat_id ? (
+                          <SmartTooltip text={`Connected: ${user.telegram_chat_id} (Click to message)`}>
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                setSelectedUser(user)
+                                setMessageModalOpen(true)
+                              }}
+                              className="h-6 w-6 rounded-md bg-[#229ED9]/10 flex items-center justify-center text-[#229ED9] hover:bg-[#229ED9]/20 transition-colors"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                            </button>
+                          </SmartTooltip>
+                        ) : (
+                          <SmartTooltip text="Not Connected">
+                            <div className="h-6 w-6 rounded-md bg-text-muted/10 flex items-center justify-center text-text-muted">
+                              <Send className="w-3.5 h-3.5 opacity-50" />
+                            </div>
+                          </SmartTooltip>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
                       <div className="flex gap-1 justify-end">
                         <SmartTooltip text="View user details">
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={(e) => {
                               e.preventDefault()
@@ -449,8 +507,8 @@ export default function AccountsPage() {
                           </Button>
                         </SmartTooltip>
                         <SmartTooltip text="Edit user">
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={(e) => {
                               e.preventDefault()
@@ -464,8 +522,8 @@ export default function AccountsPage() {
                           </Button>
                         </SmartTooltip>
                         <SmartTooltip text="Change user password">
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={(e) => {
                               e.preventDefault()
@@ -480,8 +538,8 @@ export default function AccountsPage() {
                         </SmartTooltip>
                         {isSuperAdmin && user.role !== 'super_admin' && (
                           <SmartTooltip text="Promote to super_admin">
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="sm"
                               onClick={(e) => {
                                 e.preventDefault()
@@ -497,8 +555,8 @@ export default function AccountsPage() {
                         )}
                         {isSuperAdmin && user.role === 'super_admin' && currentUser?.id !== user.id && (
                           <SmartTooltip text="Demote from super_admin">
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="sm"
                               onClick={(e) => {
                                 e.preventDefault()
@@ -514,8 +572,8 @@ export default function AccountsPage() {
                         )}
                         {isSuperAdmin && user.role !== 'super_admin' && (
                           <SmartTooltip text="Delete user">
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="sm"
                               onClick={(e) => {
                                 e.preventDefault()
@@ -613,10 +671,20 @@ export default function AccountsPage() {
         loading={actionLoading}
       />
 
+      <AdminChatModal
+        isOpen={messageModalOpen}
+        onClose={() => {
+          setMessageModalOpen(false)
+          setSelectedUser(null)
+        }}
+        user={selectedUser}
+        loading={actionLoading}
+      />
+
       {/* Self-Demote Alert - Centered with Animation */}
       {showSelfDemoteAlert && (
-        <SelfDemoteAlert 
-          onClose={() => setShowSelfDemoteAlert(false)} 
+        <SelfDemoteAlert
+          onClose={() => setShowSelfDemoteAlert(false)}
         />
       )}
 
@@ -697,8 +765,9 @@ function SelfDemoteAlert({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
-      
-      <style dangerouslySetInnerHTML={{__html: `
+
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @keyframes slideInBounce {
           0% {
             transform: scale(0.8) translateY(-30px);

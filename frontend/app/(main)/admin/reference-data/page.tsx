@@ -10,10 +10,10 @@ import { symbolsAPI, screenerAPI } from '@/lib/api'
 
 export default function ReferenceDataPage() {
   const router = useRouter()
-  const [symbolsStats, setSymbolsStats] = useState<any>({ 
-    total: 0, 
-    expiring_today: 0, 
-    skipped_symbols: 0, 
+  const [symbolsStats, setSymbolsStats] = useState<any>({
+    total: 0,
+    expiring_today: 0,
+    skipped_symbols: 0,
     last_updated: null,
     last_status: null,
     last_run_datetime: null,
@@ -57,7 +57,7 @@ export default function ReferenceDataPage() {
     // Prevent double call in React Strict Mode
     if (hasLoadedRef.current) return
     hasLoadedRef.current = true
-    
+
     const loadAllStats = async () => {
       try {
         // Load both stats in parallel but only once
@@ -89,9 +89,9 @@ export default function ReferenceDataPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="hover:shadow-lg hover:border-primary/30 transition-all duration-200 h-full border-2">
-          <div className="p-6">
+      <div className="flex flex-wrap justify-center gap-6 items-stretch">
+        <Card className="hover:shadow-lg hover:border-primary/30 transition-all duration-200 border-2 w-full max-w-sm">
+          <div className="p-6 flex flex-col h-full">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -108,7 +108,7 @@ export default function ReferenceDataPage() {
                 </div>
               </div>
             </div>
-              
+
             {/* Stats Grid - 4 Cards */}
             {loading ? (
               <div className="py-8 text-center text-text-secondary">Loading...</div>
@@ -132,56 +132,52 @@ export default function ReferenceDataPage() {
                 </button>
 
                 {/* Last Run - NON-CLICKABLE with Status inside */}
-                <div className={`text-center p-4 rounded-lg border ${
-                  symbolsStats.last_status === 'Completed' || symbolsStats.last_status === 'Completed (Partial)' 
-                    ? 'bg-success/10 dark:bg-[#10b981]/10 border-success/20'
-                    : symbolsStats.last_status === 'Failed' || symbolsStats.last_status === 'Crashed'
+                <div className={`text-center p-4 rounded-lg border ${symbolsStats.last_status === 'Completed' || symbolsStats.last_status === 'Completed (Partial)'
+                  ? 'bg-success/10 dark:bg-[#10b981]/10 border-success/20'
+                  : symbolsStats.last_status === 'Failed' || symbolsStats.last_status === 'Crashed'
                     ? 'bg-danger/10 dark:bg-[#ef4444]/10 border-danger/20'
                     : symbolsStats.last_status === 'Running' || symbolsStats.last_status === 'Queued'
-                    ? 'bg-primary/10 dark:bg-[#3b82f6]/10 border-primary/20'
-                    : symbolsStats.last_status === 'Cancelled'
-                    ? 'bg-warning/10 dark:bg-[#f59e0b]/10 border-warning/20'
-                    : 'bg-text-secondary/10 dark:bg-[#6b7280]/10 border-text-secondary/20'
-                }`}>
+                      ? 'bg-primary/10 dark:bg-[#3b82f6]/10 border-primary/20'
+                      : symbolsStats.last_status === 'Cancelled'
+                        ? 'bg-warning/10 dark:bg-[#f59e0b]/10 border-warning/20'
+                        : 'bg-text-secondary/10 dark:bg-[#6b7280]/10 border-text-secondary/20'
+                  }`}>
                   {/* Status at the top */}
-                  <div className={`text-sm font-bold font-sans mb-2 ${
-                    symbolsStats.last_status === 'Completed' || symbolsStats.last_status === 'Completed (Partial)' 
-                      ? 'text-success' 
-                      : symbolsStats.last_status === 'Failed' || symbolsStats.last_status === 'Crashed'
+                  <div className={`text-sm font-bold font-sans mb-2 ${symbolsStats.last_status === 'Completed' || symbolsStats.last_status === 'Completed (Partial)'
+                    ? 'text-success'
+                    : symbolsStats.last_status === 'Failed' || symbolsStats.last_status === 'Crashed'
                       ? 'text-danger'
                       : symbolsStats.last_status === 'Running' || symbolsStats.last_status === 'Queued'
-                      ? 'text-primary'
-                      : symbolsStats.last_status === 'Cancelled'
-                      ? 'text-warning'
-                      : 'text-text-secondary dark:text-[#9ca3af]'
-                  }`}>
+                        ? 'text-primary'
+                        : symbolsStats.last_status === 'Cancelled'
+                          ? 'text-warning'
+                          : 'text-text-secondary dark:text-[#9ca3af]'
+                    }`}>
                     {symbolsStats.last_status || symbolsStats.last_updated?.status || 'N/A'}
                   </div>
                   {/* Date below status */}
-                  <div className={`text-sm font-bold font-sans mb-1 ${
-                    symbolsStats.last_status === 'Completed' || symbolsStats.last_status === 'Completed (Partial)' 
-                      ? 'text-success' 
-                      : symbolsStats.last_status === 'Failed' || symbolsStats.last_status === 'Crashed'
+                  <div className={`text-sm font-bold font-sans mb-1 ${symbolsStats.last_status === 'Completed' || symbolsStats.last_status === 'Completed (Partial)'
+                    ? 'text-success'
+                    : symbolsStats.last_status === 'Failed' || symbolsStats.last_status === 'Crashed'
                       ? 'text-danger'
                       : symbolsStats.last_status === 'Running' || symbolsStats.last_status === 'Queued'
-                      ? 'text-primary'
-                      : symbolsStats.last_status === 'Cancelled'
-                      ? 'text-warning'
-                      : 'text-text-secondary dark:text-[#9ca3af]'
-                  }`}>
+                        ? 'text-primary'
+                        : symbolsStats.last_status === 'Cancelled'
+                          ? 'text-warning'
+                          : 'text-text-secondary dark:text-[#9ca3af]'
+                    }`}>
                     {symbolsStats.last_run_datetime ? formatDate(symbolsStats.last_run_datetime) : 'Never'}
                   </div>
-                  <div className={`text-xs font-sans ${
-                    symbolsStats.last_status === 'Completed' || symbolsStats.last_status === 'Completed (Partial)' 
-                      ? 'text-success/80' 
-                      : symbolsStats.last_status === 'Failed' || symbolsStats.last_status === 'Crashed'
+                  <div className={`text-xs font-sans ${symbolsStats.last_status === 'Completed' || symbolsStats.last_status === 'Completed (Partial)'
+                    ? 'text-success/80'
+                    : symbolsStats.last_status === 'Failed' || symbolsStats.last_status === 'Crashed'
                       ? 'text-danger/80'
                       : symbolsStats.last_status === 'Running' || symbolsStats.last_status === 'Queued'
-                      ? 'text-primary/80'
-                      : symbolsStats.last_status === 'Cancelled'
-                      ? 'text-warning/80'
-                      : 'text-text-secondary/80 dark:text-[#9ca3af]/80'
-                  }`}>
+                        ? 'text-primary/80'
+                        : symbolsStats.last_status === 'Cancelled'
+                          ? 'text-warning/80'
+                          : 'text-text-secondary/80 dark:text-[#9ca3af]/80'
+                    }`}>
                     <span className="uppercase tracking-wider">Last Run by</span>{' '}
                     {(() => {
                       const uploadType = symbolsStats.last_upload_type === 'AUTO' ? 'Auto' : symbolsStats.last_upload_type === 'MANUAL' ? 'Manual' : (symbolsStats.last_upload_type || 'N/A')
@@ -221,13 +217,13 @@ export default function ReferenceDataPage() {
                 </div>
               </div>
             )}
-              
+
             <p className="text-sm font-sans text-text-secondary dark:text-[#9ca3af] mb-4">
               Manage stock symbols, exchanges, sectors, and other symbol-related reference data used throughout the platform.
             </p>
-            <Button 
-              variant="primary" 
-              size="sm" 
+            <Button
+              variant="primary"
+              size="sm"
               className="w-full"
               onClick={(e) => {
                 e.preventDefault()
@@ -242,26 +238,26 @@ export default function ReferenceDataPage() {
           </div>
         </Card>
 
-        <Link href="/admin/reference-data/indicators" className="block">
+        <Link href="/admin/reference-data/indicators" className="block w-full max-w-sm">
           <Card className="hover:shadow-lg hover:border-success/30 transition-all duration-200 cursor-pointer h-full border-2">
-            <div className="p-6">
+            <div className="p-6 flex flex-col h-full">
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3">
                   <div className="p-3 bg-success/10 dark:bg-[#10b981]/20 rounded-xl">
                     <Activity className="w-6 h-6 text-success" />
-              </div>
-              <div>
+                  </div>
+                  <div>
                     <h3 className="text-lg font-sans font-semibold text-text-primary dark:text-[#e5e7eb]">
-                  Indicators
-                </h3>
-                <p className="text-xs font-sans text-text-secondary dark:text-[#9ca3af] mt-0.5">
-                  Technical indicators and configurations
-                </p>
+                      Indicators
+                    </h3>
+                    <p className="text-xs font-sans text-text-secondary dark:text-[#9ca3af] mt-0.5">
+                      Technical indicators and configurations
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-              
+
               {/* Placeholder for future stats */}
               <div className="grid grid-cols-1 gap-4 mb-6">
                 <div className="text-center p-6 bg-background/50 dark:bg-[#121b2f]/50 rounded-lg border border-border">
@@ -273,22 +269,22 @@ export default function ReferenceDataPage() {
                   </div>
                 </div>
               </div>
-              
-          <p className="text-sm font-sans text-text-secondary dark:text-[#9ca3af] mb-4">
-            Configure technical indicators, their parameters, and settings used in analytics and reporting.
-          </p>
+
+              <p className="text-sm font-sans text-text-secondary dark:text-[#9ca3af] mb-4">
+                Configure technical indicators, their parameters, and settings used in analytics and reporting.
+              </p>
               <Button variant="primary" size="sm" className="w-full">
                 <Settings className="w-4 h-4" />
                 Manage Indicators
                 <ArrowRight className="w-4 h-4" />
-            </Button>
+              </Button>
             </div>
           </Card>
-          </Link>
+        </Link>
 
-        <Link href="/admin/reference-data/screener/connections" className="block">
+        <Link href="/admin/reference-data/screener/connections" className="block w-full max-w-sm">
           <Card className="hover:shadow-lg hover:border-info/30 transition-all duration-200 cursor-pointer h-full border-2">
-            <div className="p-6">
+            <div className="p-6 flex flex-col h-full">
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -305,108 +301,104 @@ export default function ReferenceDataPage() {
                   </div>
                 </div>
               </div>
-              
-            {/* Stats Grid - 4 Cards */}
-            {screenerLoading ? (
-              <div className="py-8 text-center text-text-secondary">Loading...</div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                {/* Total Records - CLICKABLE */}
-                <button
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    router.push('/users/screener')
-                  }}
-                  className="text-center p-4 bg-background/50 dark:bg-[#121b2f]/50 rounded-lg border border-border hover:border-info/50 hover:bg-info/5 transition-all cursor-pointer w-full"
-                >
-                  <div className="text-3xl font-bold font-sans text-text-primary dark:text-[#e5e7eb] mb-1">
-                    {screenerStats.total_records?.toLocaleString() || 0}
-                  </div>
-                  <div className="text-xs font-sans text-text-secondary dark:text-[#9ca3af] uppercase tracking-wider">
-                    Total Records
-                  </div>
-                </button>
 
-                {/* Last Run - NON-CLICKABLE with Status inside */}
-                <div className={`text-center p-4 rounded-lg border ${
-                  screenerStats.last_status === 'COMPLETED' || screenerStats.last_status === 'COMPLETED (Partial)' 
+              {/* Stats Grid - 4 Cards */}
+              {screenerLoading ? (
+                <div className="py-8 text-center text-text-secondary">Loading...</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  {/* Total Records - CLICKABLE */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      router.push('/users/screener')
+                    }}
+                    className="text-center p-4 bg-background/50 dark:bg-[#121b2f]/50 rounded-lg border border-border hover:border-info/50 hover:bg-info/5 transition-all cursor-pointer w-full"
+                  >
+                    <div className="text-3xl font-bold font-sans text-text-primary dark:text-[#e5e7eb] mb-1">
+                      {screenerStats.total_records?.toLocaleString() || 0}
+                    </div>
+                    <div className="text-xs font-sans text-text-secondary dark:text-[#9ca3af] uppercase tracking-wider">
+                      Total Records
+                    </div>
+                  </button>
+
+                  {/* Last Run - NON-CLICKABLE with Status inside */}
+                  <div className={`text-center p-4 rounded-lg border ${screenerStats.last_status === 'COMPLETED' || screenerStats.last_status === 'COMPLETED (Partial)'
                     ? 'bg-success/10 dark:bg-[#10b981]/10 border-success/20'
                     : screenerStats.last_status === 'FAILED'
-                    ? 'bg-danger/10 dark:bg-[#ef4444]/10 border-danger/20'
-                    : screenerStats.last_status === 'PROCESSING'
-                    ? 'bg-primary/10 dark:bg-[#3b82f6]/10 border-primary/20'
-                    : 'bg-text-secondary/10 dark:bg-[#6b7280]/10 border-text-secondary/20'
-                }`}>
-                  {/* Status at the top */}
-                  <div className={`text-sm font-bold font-sans mb-2 ${
-                    screenerStats.last_status === 'COMPLETED' || screenerStats.last_status === 'COMPLETED (Partial)' 
-                      ? 'text-success' 
-                      : screenerStats.last_status === 'FAILED'
-                      ? 'text-danger'
+                      ? 'bg-danger/10 dark:bg-[#ef4444]/10 border-danger/20'
                       : screenerStats.last_status === 'PROCESSING'
-                      ? 'text-primary'
-                      : 'text-text-secondary dark:text-[#9ca3af]'
-                  }`}>
-                    {screenerStats.last_status || 'N/A'}
-                  </div>
-                  {/* Date below status */}
-                  <div className={`text-sm font-bold font-sans mb-1 ${
-                    screenerStats.last_status === 'COMPLETED' || screenerStats.last_status === 'COMPLETED (Partial)' 
-                      ? 'text-success' 
+                        ? 'bg-primary/10 dark:bg-[#3b82f6]/10 border-primary/20'
+                        : 'bg-text-secondary/10 dark:bg-[#6b7280]/10 border-text-secondary/20'
+                    }`}>
+                    {/* Status at the top */}
+                    <div className={`text-sm font-bold font-sans mb-2 ${screenerStats.last_status === 'COMPLETED' || screenerStats.last_status === 'COMPLETED (Partial)'
+                      ? 'text-success'
                       : screenerStats.last_status === 'FAILED'
-                      ? 'text-danger'
-                      : screenerStats.last_status === 'PROCESSING'
-                      ? 'text-primary'
-                      : 'text-text-secondary dark:text-[#9ca3af]'
-                  }`}>
-                    {screenerStats.last_run_datetime ? formatDate(screenerStats.last_run_datetime) : 'Never'}
-                  </div>
-                  <div className={`text-xs font-sans ${
-                    screenerStats.last_status === 'COMPLETED' || screenerStats.last_status === 'COMPLETED (Partial)' 
-                      ? 'text-success/80' 
+                        ? 'text-danger'
+                        : screenerStats.last_status === 'PROCESSING'
+                          ? 'text-primary'
+                          : 'text-text-secondary dark:text-[#9ca3af]'
+                      }`}>
+                      {screenerStats.last_status || 'N/A'}
+                    </div>
+                    {/* Date below status */}
+                    <div className={`text-sm font-bold font-sans mb-1 ${screenerStats.last_status === 'COMPLETED' || screenerStats.last_status === 'COMPLETED (Partial)'
+                      ? 'text-success'
                       : screenerStats.last_status === 'FAILED'
-                      ? 'text-danger/80'
-                      : screenerStats.last_status === 'PROCESSING'
-                      ? 'text-primary/80'
-                      : 'text-text-secondary/80 dark:text-[#9ca3af]/80'
-                  }`}>
-                    <span className="uppercase tracking-wider">Last Run by</span>{' '}
-                    {screenerStats.last_triggered_by || 'N/A'}
+                        ? 'text-danger'
+                        : screenerStats.last_status === 'PROCESSING'
+                          ? 'text-primary'
+                          : 'text-text-secondary dark:text-[#9ca3af]'
+                      }`}>
+                      {screenerStats.last_run_datetime ? formatDate(screenerStats.last_run_datetime) : 'Never'}
+                    </div>
+                    <div className={`text-xs font-sans ${screenerStats.last_status === 'COMPLETED' || screenerStats.last_status === 'COMPLETED (Partial)'
+                      ? 'text-success/80'
+                      : screenerStats.last_status === 'FAILED'
+                        ? 'text-danger/80'
+                        : screenerStats.last_status === 'PROCESSING'
+                          ? 'text-primary/80'
+                          : 'text-text-secondary/80 dark:text-[#9ca3af]/80'
+                      }`}>
+                      <span className="uppercase tracking-wider">Last Run by</span>{' '}
+                      {screenerStats.last_triggered_by || 'N/A'}
+                    </div>
                   </div>
-                </div>
 
-                {/* Symbols Succeeded - NON-CLICKABLE */}
-                <div className="text-center p-4 bg-success/10 dark:bg-[#10b981]/10 rounded-lg border border-success/20">
-                  <div className="text-3xl font-bold font-sans text-success mb-1">
-                    {screenerStats.last_symbols_succeeded?.toLocaleString() || 0}
+                  {/* Symbols Succeeded - NON-CLICKABLE */}
+                  <div className="text-center p-4 bg-success/10 dark:bg-[#10b981]/10 rounded-lg border border-success/20">
+                    <div className="text-3xl font-bold font-sans text-success mb-1">
+                      {screenerStats.last_symbols_succeeded?.toLocaleString() || 0}
+                    </div>
+                    <div className="text-xs font-sans text-success uppercase tracking-wider">
+                      Succeeded
+                    </div>
                   </div>
-                  <div className="text-xs font-sans text-success uppercase tracking-wider">
-                    Succeeded
-                  </div>
-                </div>
 
-                {/* Records Inserted - NON-CLICKABLE */}
-                <div className="text-center p-4 bg-info/10 dark:bg-[#06b6d4]/10 rounded-lg border border-info/20">
-                  <div className="text-3xl font-bold font-sans text-info mb-1">
-                    {screenerStats.last_records_inserted?.toLocaleString() || 0}
-                  </div>
-                  <div className="text-xs font-sans text-info uppercase tracking-wider">
-                    Records
+                  {/* Records Inserted - NON-CLICKABLE */}
+                  <div className="text-center p-4 bg-info/10 dark:bg-[#06b6d4]/10 rounded-lg border border-info/20">
+                    <div className="text-3xl font-bold font-sans text-info mb-1">
+                      {screenerStats.last_records_inserted?.toLocaleString() || 0}
+                    </div>
+                    <div className="text-xs font-sans text-info uppercase tracking-wider">
+                      Records
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-              
-            <p className="text-sm font-sans text-text-secondary dark:text-[#9ca3af] mb-4">
-              Scrape company fundamentals, financial statements, ratios, news, and corporate actions from Screener.in.
-            </p>
-            <Button variant="primary" size="sm" className="w-full">
-              <Settings className="w-4 h-4" />
-              Configure Screener
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </div>
+              )}
+
+              <p className="text-sm font-sans text-text-secondary dark:text-[#9ca3af] mb-4">
+                Scrape company fundamentals, financial statements, ratios, news, and corporate actions from Screener.in.
+              </p>
+              <Button variant="primary" size="sm" className="w-full">
+                <Settings className="w-4 h-4" />
+                Configure Screener
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
           </Card>
         </Link>
       </div>

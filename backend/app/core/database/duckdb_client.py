@@ -11,12 +11,15 @@ class DuckDBClient(DatabaseClient):
     
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
-        self.databases = {
-            "ohlcv": config.get("ohlcv", "./data/analytics/duckdb/ohlcv.duckdb"),
-            "indicators": config.get("indicators", "./data/analytics/duckdb/indicators.duckdb"),
-            "signals": config.get("signals", "./data/analytics/duckdb/signals.duckdb"),
-            "jobs": config.get("jobs", "./data/analytics/duckdb/jobs.duckdb"),
-        }
+        if "path" in config:
+            self.databases = {"default": config["path"]}
+        else:
+            self.databases = {
+                "ohlcv": config.get("ohlcv", "./data/analytics/duckdb/ohlcv.duckdb"),
+                "indicators": config.get("indicators", "./data/analytics/duckdb/indicators.duckdb"),
+                "signals": config.get("signals", "./data/analytics/duckdb/signals.duckdb"),
+                "jobs": config.get("jobs", "./data/analytics/duckdb/jobs.duckdb"),
+            }
         self.connections = {}
     
     def connect(self) -> bool:
@@ -24,7 +27,7 @@ class DuckDBClient(DatabaseClient):
         try:
             for name, path in self.databases.items():
                 os.makedirs(os.path.dirname(path), exist_ok=True)
-                self.connections[name] = duckdb.connect(path)
+                self.connections[name] = duckdb.connect(path, config={'allow_unsigned_extensions': True})
             self.is_connected = True
             return True
         except Exception as e:

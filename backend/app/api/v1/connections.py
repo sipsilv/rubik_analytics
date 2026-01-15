@@ -50,19 +50,38 @@ async def get_connections(
             # Extract URL and port from credentials for TrueData connections
             url = None
             port = None
+            safe_details = {}
+            
             provider_normalized = conn.provider.upper().replace(" ", "").replace("_", "").replace("-", "") if conn.provider else ""
-            if provider_normalized == "TRUEDATA" and conn.credentials:
+            
+            # Decrypt credentials for all connections to populate 'details'
+            if conn.credentials:
                 try:
                     decrypted_json = decrypt_data(conn.credentials)
                     config = json.loads(decrypted_json)
-                    url = config.get("auth_url", settings.TRUEDATA_DEFAULT_AUTH_URL)
-                    port = config.get("websocket_port", settings.TRUEDATA_DEFAULT_WEBSOCKET_PORT)
+                    
+                    # For TrueData, specific URL/Port extraction
+                    if provider_normalized == "TRUEDATA":
+                        url = config.get("auth_url", settings.TRUEDATA_DEFAULT_AUTH_URL)
+                        port = config.get("websocket_port", settings.TRUEDATA_DEFAULT_WEBSOCKET_PORT)
+                    
+                    # Mask sensitive fields
+                    sensitive_keys = ['password', 'api_secret', 'access_token', 'api_hash', 'bot_token', 'secret_key', 'api_key_secret']
+                    safe_details = {
+                        k: ('********' if k in sensitive_keys or 'secret' in k.lower() or 'password' in k.lower() or 'hash' in k.lower() or 'token' in k.lower() else v) 
+                        for k, v in config.items()
+                    }
+                    # Exception: Ensure api_id is visible (it's often public-ish or needed for identifying)
+                    if 'api_id' in safe_details:
+                         safe_details['api_id'] = config.get('api_id')
+                         
                 except Exception as e:
-                    logger.debug(f"Could not extract URL/port from credentials for connection {conn.id}: {e}")
+                    logger.debug(f"Could not extract/decrypt credentials for connection {conn.id}: {e}")
                     # Use defaults if extraction fails
-                    url = settings.TRUEDATA_DEFAULT_AUTH_URL
-                    port = settings.TRUEDATA_DEFAULT_WEBSOCKET_PORT
-            
+                    if provider_normalized == "TRUEDATA":
+                        url = settings.TRUEDATA_DEFAULT_AUTH_URL
+                        port = settings.TRUEDATA_DEFAULT_WEBSOCKET_PORT
+
             # Prepare data with defaults for None values
             conn_dict = {
                 'id': conn.id,
@@ -79,7 +98,8 @@ async def get_connections(
                 'created_at': conn.created_at if conn.created_at is not None else datetime.now(timezone.utc),
                 'updated_at': conn.updated_at,
                 'url': url,
-                'port': port
+                'port': port,
+                'details': safe_details
             }
             
             # Use model_validate with dict to ensure proper validation
@@ -277,11 +297,73 @@ async def create_connection(
                 
         except HTTPException:
             raise
-        except Exception as e:
             logger.error(f"Error processing TrueData connection: {e}", exc_info=True)
             connection_status = ConnectionStatus.ERROR
             connection_health = ConnectionHealth.DOWN
             error_message = f"Error setting up TrueData connection: {str(e)}"
+    # Validate Telegram Bot credentials (if Connection Type is TELEGRAM_BOT)
+    # Validate Telegram Bot credentials (if Connection Type is TELEGRAM_BOT)
+    elif connection_data.connection_type == "TELEGRAM_BOT" and connection_data.details:
+        bot_token = connection_data.details.get("bot_token")
+        if bot_token:
+            try:
+                import aiohttp
+                # Strip "bot" prefix if user accidentally included it
+                clean_token = bot_token.strip()
+                if clean_token.lower().startswith("bot") and len(clean_token) > 3 and clean_token[3].isdigit():
+                    clean_token = clean_token[3:]
+                    logger.info("Stripped 'bot' prefix from token")
+
+                # Update the details with the clean token so it's saved correctly
+                connection_data.details["bot_token"] = clean_token
+
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"https://api.telegram.org/bot{clean_token}/getMe", timeout=10) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            if data.get("ok"):
+                                connection_status = ConnectionStatus.CONNECTED
+                                connection_health = ConnectionHealth.HEALTHY
+                                logger.info(f"Telegram Bot validated: {data.get('result', {}).get('first_name')}")
+                            else:
+                                raise HTTPException(
+                                    status_code=400,
+                                    detail=f"Telegram API Error: {data.get('description')}"
+                                )
+                        elif resp.status == 401:
+                             raise HTTPException(
+                                 status_code=400,
+                                 detail="Invalid Bot Token. Telegram rejected authorization (401). Please double-check your token from @BotFather."
+                             )
+                        elif resp.status == 404:
+                             raise HTTPException(
+                                 status_code=400,
+                                 detail="Invalid Bot Token Format (404). Please ensure you didn't paste extra text or the 'bot' prefix twice."
+                             )
+                        else:
+                            raise HTTPException(
+                                status_code=400,
+                                detail=f"Telegram API HTTP Error: {resp.status}"
+                            )
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Telegram Validation Failed: {str(e)}"
+                )
+
+    # Validate Telegram User credentials
+    elif connection_data.connection_type in ["TELEGRAMUSER", "TELEGRAM_USER"] and connection_data.details:
+        api_id = connection_data.details.get("api_id")
+        api_hash = connection_data.details.get("api_hash")
+        if not (api_id and api_hash):
+             raise HTTPException(
+                 status_code=400,
+                 detail="Missing API ID or Hash for Telegram User"
+             )
+        connection_status = ConnectionStatus.CONNECTED
+        connection_health = ConnectionHealth.HEALTHY
 
     # Encrypt details if present
     encrypted_creds = None
@@ -298,6 +380,13 @@ async def create_connection(
     else:
         logger.warning(f"No details provided for connection creation: {connection_data.name}")
 
+    # Raising error here if it was set earlier (e.g. TrueData) and flow reached here
+    if error_message:
+        raise HTTPException(
+            status_code=400,
+            detail=error_message
+        )
+
     new_conn = Connection(
         name=connection_data.name,
         connection_type=connection_data.connection_type,
@@ -310,7 +399,7 @@ async def create_connection(
         health=connection_health.value,
         last_checked_at=datetime.now(timezone.utc) if connection_status == ConnectionStatus.CONNECTED else None,
         last_success_at=datetime.now(timezone.utc) if connection_status == ConnectionStatus.CONNECTED else None,
-        error_logs=json.dumps({"error": error_message}) if error_message else None
+        error_logs=None # No error logs if we are creating successfully
     )
     
     db.add(new_conn)
@@ -351,14 +440,6 @@ async def create_connection(
         None, 
         {"name": new_conn.name, "type": new_conn.connection_type, "status": connection_status.value}
     )
-    
-    # If there was an error, raise it after saving the connection
-    if error_message:
-        raise HTTPException(
-            status_code=400,
-            detail=error_message
-        )
-    
     
     return new_conn
 
@@ -460,8 +541,10 @@ async def update_connection(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_admin_user)
 ):
+    logger.info(f"Received update request for connection ID {id} with data: {update_data}")
     conn = db.query(Connection).filter(Connection.id == id).first()
     if not conn:
+        logger.error(f"Connection ID {id} not found.")
         raise HTTPException(status_code=404, detail="Connection not found")
         
     old_state = {"name": conn.name, "enabled": conn.is_enabled}
@@ -474,6 +557,8 @@ async def update_connection(
 
     if update_data.name:
         conn.name = update_data.name
+    if update_data.provider: # Allow updating provider
+        conn.provider = update_data.provider
     if update_data.description:
         conn.description = update_data.description
     if update_data.environment:
@@ -486,57 +571,42 @@ async def update_connection(
         try:
             merged_details = None
             
-            # For TrueData, merge with existing credentials if new ones aren't provided
+            # GENERIC MERGE: Get existing credentials first for ALL providers
+            existing_config = {}
+            if conn.credentials:
+                try:
+                    decrypted_existing = decrypt_data(conn.credentials)
+                    existing_config = json.loads(decrypted_existing)
+                    logger.info(f"Loaded existing credentials for connection {id}, keys: {list(existing_config.keys())}")
+                except ValueError as e:
+                    # Invalid encryption key configuration
+                    logger.error(f"Invalid encryption key configuration: {e}")
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Invalid encryption key configuration. Cannot decrypt existing credentials. Please check ENCRYPTION_KEY environment variable."
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not decrypt existing credentials: {e}")
+                    # If we can't decrypt and user is only updating URL/port (not providing username/password),
+                    # we need to fail gracefully if it is critical, but for now we proceed.
+            
+            # Merge: use new values if provided, otherwise keep existing
+            merged_details = existing_config.copy() if existing_config else {}
+            logger.info(f"Starting merge - existing keys: {list(existing_config.keys())}, new keys: {list(update_data.details.keys())}")
+            
+            for key, value in update_data.details.items():
+                # Only update if value is not None/undefined/empty string
+                # Also check for string "undefined" which might come from JSON
+                value_str = str(value).strip() if value is not None else ""
+                if value is not None and value != "" and value_str != "" and str(value).lower() != "undefined":
+                    merged_details[key] = value
+                else:
+                    # Keep existing value if it exists
+                    if key not in merged_details:
+                        logger.warning(f"Key {key} not in existing config and new value is empty - this field will be missing!")
+            
+            # Ensure required fields are present for TrueData specifically
             if is_truedata:
-                # Get existing credentials first
-                existing_config = {}
-                decryption_failed = False
-                if conn.credentials:
-                    try:
-                        decrypted_existing = decrypt_data(conn.credentials)
-                        existing_config = json.loads(decrypted_existing)
-                        logger.info(f"Loaded existing credentials for connection {id}, keys: {list(existing_config.keys())}")
-                    except ValueError as e:
-                        # Invalid encryption key configuration
-                        logger.error(f"Invalid encryption key configuration: {e}")
-                        decryption_failed = True
-                        raise HTTPException(
-                            status_code=500,
-                            detail=f"Invalid encryption key configuration. Cannot decrypt existing credentials. Please check ENCRYPTION_KEY environment variable."
-                        )
-                    except Exception as e:
-                        logger.warning(f"Could not decrypt existing credentials: {e}")
-                        decryption_failed = True
-                        # If we can't decrypt and user is only updating URL/port (not providing username/password),
-                        # we need to fail gracefully
-                        has_username = update_data.details.get("username") and str(update_data.details.get("username")).strip()
-                        has_password = update_data.details.get("password") and str(update_data.details.get("password")).strip()
-                        if not has_username or not has_password:
-                            raise HTTPException(
-                                status_code=400,
-                                detail=f"Cannot decrypt existing credentials. Please provide both username and password when updating the connection."
-                            )
-                
-                # Merge: use new values if provided, otherwise keep existing
-                merged_details = existing_config.copy() if existing_config else {}
-                logger.info(f"Starting merge - existing keys: {list(existing_config.keys())}, new keys: {list(update_data.details.keys())}")
-                logger.info(f"Existing credentials (masked): { {k: ('***' if k in ['password', 'api_secret'] else v) for k, v in existing_config.items()} }")
-                logger.info(f"New details values (masked): { {k: ('***' if k in ['password', 'api_secret'] else repr(v)) for k, v in update_data.details.items()} }")
-                
-                for key, value in update_data.details.items():
-                    # Only update if value is not None/undefined/empty string
-                    # Also check for string "undefined" which might come from JSON
-                    value_str = str(value).strip() if value is not None else ""
-                    if value is not None and value != "" and value_str != "" and str(value).lower() != "undefined":
-                        merged_details[key] = value
-                        logger.info(f"Updating {key} in credentials (value: {repr(value)[:50]})")
-                    else:
-                        logger.info(f"Skipping {key} (value is None/empty/undefined: {repr(value)})")
-                        # Keep existing value if it exists
-                        if key not in merged_details:
-                            logger.warning(f"Key {key} not in existing config and new value is empty - this field will be missing!")
-                
-                # Ensure required fields are present
                 if "username" not in merged_details or not merged_details.get("username"):
                     logger.error(f"CRITICAL: Username is missing after merge for connection {id}")
                     raise HTTPException(
@@ -549,7 +619,7 @@ async def update_connection(
                         status_code=400,
                         detail="Password is required. Please enter your TrueData password in the Configure dialog and save the connection."
                     )
-                
+            
                 logger.info(f"Merged credentials keys: {list(merged_details.keys())}")
                 logger.info(f"Merged credentials (masked): { {k: ('***' if k in ['password', 'api_secret'] else v) for k, v in merged_details.items()} }")
                 
@@ -578,6 +648,8 @@ async def update_connection(
                         conn.last_success_at = datetime.now(timezone.utc)
                         conn.error_logs = None
                         logger.info(f"Token regenerated successfully during connection update")
+            
+
                         
                     except requests.exceptions.HTTPError as e:
                         # Token generation failed with HTTP error
@@ -602,8 +674,8 @@ async def update_connection(
                         conn.error_logs = json.dumps({"error": error_message})
                         # Don't raise here - allow connection to be saved with error status
             
-            # Encrypt and store credentials (use merged_details for TrueData, or original details for others)
-            final_details = merged_details if (is_truedata and merged_details) else update_data.details
+            # Encrypt and store credentials (use merged_details if available, else new details)
+            final_details = merged_details if merged_details else update_data.details
             logger.info(f"Final credentials to save - keys: {list(final_details.keys())}")
             logger.info(f"Final credentials (masked): { {k: ('***' if k in ['password', 'api_secret'] else v) for k, v in final_details.items()} }")
             
@@ -619,6 +691,20 @@ async def update_connection(
                         status_code=400,
                         detail="Password is required. Please enter your TrueData password in the Configure dialog and save the connection."
                     )
+            
+            # Update status for Telegram User
+            elif provider_normalized in ["TELEGRAMUSER", "TELEGRAM_USER"]:
+                 api_id = final_details.get("api_id")
+                 api_hash = final_details.get("api_hash")
+                 if api_id and api_hash:
+                      conn.status = ConnectionStatus.CONNECTED.value
+                      conn.health = ConnectionHealth.HEALTHY.value
+                      conn.last_checked_at = datetime.now(timezone.utc)
+                      # conn.last_success_at = datetime.now(timezone.utc) # Only set success if we actually tested. But CONNECTED implies success here.
+                      conn.error_logs = None
+                 else:
+                      conn.status = ConnectionStatus.ERROR.value
+                      conn.health = ConnectionHealth.DOWN.value
             
             try:
                 json_str = json.dumps(final_details)
@@ -640,7 +726,87 @@ async def update_connection(
                 # Ensure we convert enum to string if it's an enum, otherwise use as-is
                 conn.status = connection_status.value if hasattr(connection_status, 'value') else str(connection_status)
                 conn.health = connection_health.value if hasattr(connection_health, 'value') else str(connection_health)
+            
+            elif provider_normalized in ["TELEGRAMUSER", "TELEGRAM_USER"]:
+                 api_id = final_details.get("api_id")
+                 api_hash = final_details.get("api_hash")
+                 session_string = final_details.get("session_string")
+
+                 if api_id and api_hash and session_string:
+                      conn.status = ConnectionStatus.CONNECTED.value
+                      conn.health = ConnectionHealth.HEALTHY.value
+                      conn.last_checked_at = datetime.now(timezone.utc)
+                      conn.last_success_at = datetime.now(timezone.utc)
+                      conn.error_logs = None
+                 elif api_id and api_hash:
+                      # Configured but not logged in
+                      conn.status = ConnectionStatus.DISCONNECTED.value
+                      conn.health = ConnectionHealth.DOWN.value
+                      conn.last_checked_at = datetime.now(timezone.utc)
+                      conn.error_logs = json.dumps({"message": "Login Required: Please verify OTP"})
+                 else:
+                      conn.status = ConnectionStatus.ERROR.value
+                      conn.health = ConnectionHealth.DOWN.value
                 
+            elif conn.connection_type == "TELEGRAM_BOT":
+                 bot_token = final_details.get("bot_token")
+                 logger.info(f"Validating Telegram Bot Token: {bot_token[:5]}... (Length: {len(bot_token) if bot_token else 0})")
+                 
+                 if bot_token:
+                    try:
+                        import aiohttp
+                        # Strip "bot" prefix if user accidentally included it
+                        clean_token = bot_token.strip()
+                        if clean_token.lower().startswith("bot") and clean_token[3].isdigit():
+                            clean_token = clean_token[3:]
+                            logger.info("Stripped 'bot' prefix from token")
+                        
+                        # Update final_details with clean token if changed
+                        if clean_token != bot_token:
+                            final_details["bot_token"] = clean_token
+                            # Re-encrypt
+                            json_str = json.dumps(final_details)
+                            conn.credentials = encrypt_data(json_str)
+
+                        async with aiohttp.ClientSession() as session:
+                             async with session.get(f"https://api.telegram.org/bot{clean_token}/getMe", timeout=10) as resp:
+                                logger.info(f"Telegram API Response Code: {resp.status}")
+                                
+                                if resp.status == 200:
+                                    data = await resp.json()
+                                    if data.get("ok"):
+                                        conn.status = ConnectionStatus.CONNECTED.value
+                                        conn.health = ConnectionHealth.HEALTHY.value
+                                        conn.last_checked_at = datetime.now(timezone.utc)
+                                        conn.last_success_at = datetime.now(timezone.utc)
+                                        conn.error_logs = None
+                                        logger.info(f"Telegram Bot re-validated: {data.get('result', {}).get('first_name')}")
+                                    else:
+                                        error_desc = data.get('description', 'Unknown Error')
+                                        error_message = f"Telegram API Check Failed: {error_desc}"
+                                        logger.error(error_message)
+                                        conn.status = ConnectionStatus.ERROR.value
+                                        conn.health = ConnectionHealth.DOWN.value
+                                        conn.error_logs = json.dumps({"error": error_message})
+                                elif resp.status == 401:
+                                     error_message = "Invalid Bot Token (Unauthorized)"
+                                     logger.error(error_message)
+                                     conn.status = ConnectionStatus.ERROR.value
+                                     conn.health = ConnectionHealth.DOWN.value
+                                     conn.error_logs = json.dumps({"error": error_message})
+                                else:
+                                    error_message = f"Telegram API HTTP Error: {resp.status} - {await resp.text()}"
+                                    logger.error(error_message)
+                                    conn.status = ConnectionStatus.ERROR.value
+                                    conn.health = ConnectionHealth.DOWN.value
+                                    conn.error_logs = json.dumps({"error": error_message})
+                    except Exception as e:
+                        error_message = f"Telegram Validation Exception: {str(e)}"
+                        logger.exception(error_message)
+                        conn.status = ConnectionStatus.ERROR.value
+                        conn.health = ConnectionHealth.DOWN.value
+                        conn.error_logs = json.dumps({"error": error_message})
+
         except HTTPException:
             raise
         except Exception as e:
@@ -795,6 +961,7 @@ async def test_connection(
         message = ""
         
         # Handle TrueData token-based connections
+        # Handle TrueData token-based connections
         if provider_normalized == "TRUEDATA":
             try:
                 from app.services.token_service import get_token_service
@@ -805,21 +972,165 @@ async def test_connection(
                 password = config.get("password")
                 auth_url = config.get("auth_url", settings.TRUEDATA_DEFAULT_AUTH_URL)
                 
-                if not username or not password:
-                    raise Exception("Username and password required for TrueData connection")
-                
-                # Generate or refresh token
-                token_service.refresh_token_if_needed(connection_id=id, username=username, password=password, auth_url=auth_url)
-                
-                # Verify token exists and is valid
-                token = token_service.get_token(connection_id=id)
-                if not token:
-                    raise Exception("Failed to obtain valid token")
-                
-                is_connected = True
-                message = "TrueData token generated and validated successfully"
+                if username and password:
+                    token_result = token_service.generate_token(
+                        connection_id=id,
+                        username=username,
+                        password=password,
+                        auth_url=auth_url
+                    )
+                    
+                    if token_result:
+                        is_connected = True
+                        message = "TrueData authentication successful"
+                    else:
+                        message = "TrueData token generation failed"
+                else:
+                    message = "Missing TrueData credentials (username/password)"
+            
             except Exception as e:
-                raise Exception(f"TrueData connection test failed: {str(e)}")
+                is_connected = False
+                message = f"TrueData Test Failed: {str(e)}"
+            
+            # DB Update for TrueData
+            if is_connected:
+                conn.status = "CONNECTED"
+                conn.health = "HEALTHY"
+                conn.last_checked_at = datetime.now(timezone.utc)
+                conn.last_success_at = datetime.now(timezone.utc)
+                conn.error_logs = None
+            else:
+                conn.status = "ERROR"
+                conn.health = "DOWN"
+                conn.last_checked_at = datetime.now(timezone.utc)
+                conn.error_logs = json.dumps({"error": message})
+            
+            db.commit()
+            return {"status": "success" if is_connected else "error", "message": message}
+
+        # Add Telegram Bot Test Logic
+        # Check connection_type OR provider name for robustness
+        elif (conn.connection_type == "TELEGRAM_BOT") or (provider_normalized == "TELEGRAMBOT") or (provider_normalized == "TELEGRAM"):
+            if config.get("bot_token"):
+                try:
+                    import aiohttp
+                    token = config.get("bot_token")
+                    
+                    # Strip "bot" prefix if present
+                    clean_token = token.strip()
+                    if clean_token.lower().startswith("bot") and len(clean_token) > 3 and clean_token[3].isdigit():
+                        clean_token = clean_token[3:]
+                    
+                    # Call getMe to verify token using aiohttp
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(f"https://api.telegram.org/bot{clean_token}/getMe", timeout=10) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                if data.get("ok"):
+                                    bot_info = data.get("result", {})
+                                    is_connected = True
+                                    message = f"Connected as @{bot_info.get('username')} ({bot_info.get('first_name')})"
+                                else:
+                                    message = f"Telegram API Error: {data.get('description')}"
+                            elif resp.status == 401:
+                                message = "Invalid Bot Token (Unauthorized). Please check your token."
+                            elif resp.status == 404:
+                                message = "Invalid Bot Token Format (404). Check for extra characters or 'bot' prefix."
+                            else:
+                                message = f"Telegram API HTTP Error: {resp.status} - {await resp.text()}"
+
+                except Exception as e:
+                    message = f"Telegram Connection Failed: {str(e)}"
+            else:
+                 message = "Bot Token is missing in configuration."
+            
+            # DB Update for Telegram
+            if is_connected:
+                conn.status = "CONNECTED"
+                conn.health = "HEALTHY"
+                conn.last_checked_at = datetime.now(timezone.utc)
+                conn.last_success_at = datetime.now(timezone.utc)
+                conn.error_logs = None
+            else:
+                conn.status = "ERROR"
+                conn.health = "DOWN"
+                conn.last_checked_at = datetime.now(timezone.utc)
+                conn.error_logs = json.dumps({"error": message})
+            
+            db.commit()
+            return {"status": "success" if is_connected else "error", "message": message}
+
+            db.commit()
+            return {"status": "success" if is_connected else "error", "message": message}
+
+        # Add Telegram User Test Logic
+        elif provider_normalized in ["TELEGRAMUSER", "TELEGRAM_USER"]:
+            try:
+                # Check for session string or minimal credentials
+                session_string = config.get("session_string")
+                api_id = config.get("api_id")
+                api_hash = config.get("api_hash")
+                phone = config.get("phone")
+
+                if session_string:
+                    # If we have a session string, we assume it's valid for now 
+                    # (Full verification requires async Telethon `connect()` which might be slow or problematic here)
+                    # Ideally, we'd try to connect, but for quick UI feedback:
+                    is_connected = True
+                    message = "Telegram session present"
+                    
+                    # Optional: specific check if telethon is available
+                    try:
+                        from telethon.sync import TelegramClient
+                        from telethon.sessions import StringSession
+                        
+                        client = TelegramClient(StringSession(session_string), api_id, api_hash)
+                        client.connect()
+                        if client.is_user_authorized():
+                            me = client.get_me()
+                            message = f"Connected as User: {me.first_name} (@{me.username})"
+                            is_connected = True
+                        else:
+                            is_connected = False
+                            message = "Session valid but not authorized (re-login needed)"
+                        client.disconnect()
+                    except ImportError:
+                        message = "Telegram session present (Telethon not installed for deep check)"
+                    except Exception as e:
+                         # Fallback if connection fails but string exists - might be network or old session
+                         # We'll mark as error to prompt user to check
+                         is_connected = False
+                         message = f"Telegram User Connection Error: {str(e)}"
+                
+                elif api_id and api_hash:
+                     # Credentials present but NO session string
+                     # Mark as CONNECTED but with a warning, OR DISCONNECTED/ERROR depending on user preference.
+                     # User request: "if doest ask [OTP] then say connected" - implies they want to know if it's NOT connected.
+                     # Strict check:
+                     is_connected = False
+                     message = "Disconnected: Login Required (OTP verification needed)"
+                else:
+                     is_connected = False
+                     message = "Missing API ID or Hash"
+
+            except Exception as e:
+                message = f"Telegram User Verification Failed: {str(e)}"
+
+            # DB Update for Telegram User
+            if is_connected:
+                conn.status = "CONNECTED"
+                conn.health = "HEALTHY"
+                conn.last_checked_at = datetime.now(timezone.utc)
+                conn.last_success_at = datetime.now(timezone.utc)
+                conn.error_logs = None
+            else:
+                conn.status = "ERROR"
+                conn.health = "DOWN"
+                conn.last_checked_at = datetime.now(timezone.utc)
+                conn.error_logs = json.dumps({"error": message})
+            
+            db.commit()
+            return {"status": "success" if is_connected else "error", "message": message}
         
         elif provider in ["sqlite", "duckdb", "duckdb_sqlalchemy"]:
             path = config.get("path") or config.get("database") or config.get("filename")
@@ -866,7 +1177,7 @@ async def test_connection(
                 import duckdb
                 try:
                     # Connect and run simple query
-                    connection = duckdb.connect(path)
+                    connection = duckdb.connect(path, config={'allow_unsigned_extensions': True})
                     connection.execute("SELECT 1")
                     connection.close()
                     is_connected = True
@@ -1401,3 +1712,86 @@ async def call_truedata_corporate_api(
     except Exception as e:
         logger.error(f"Error calling Corporate API {endpoint} for connection {id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to call API: {str(e)}")
+
+@router.post("/{id}/toggle", response_model=ConnectionResponse)
+async def toggle_connection(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user)
+):
+    """
+    Toggle connection enabled/disabled status
+    """
+    conn = db.query(Connection).filter(Connection.id == id).first()
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    
+    # Toggle status
+    conn.is_enabled = not conn.is_enabled
+    
+    # Log audit event
+    action = "ENABLE_CONNECTION" if conn.is_enabled else "DISABLE_CONNECTION"
+    log_audit_event(
+        db, 
+        current_user.id, 
+        action, 
+        "connections", 
+        str(conn.id), 
+        None, 
+        {"name": conn.name, "new_status": conn.is_enabled}
+    )
+    
+    db.commit()
+    
+    # Auto-verify if enabled (only for DB connections)
+    if conn.is_enabled:
+        try:
+            # Re-test connection to ensure validity
+            # We call the existing test_connection endpoint logic
+            await test_connection(id, db, current_user)
+        except Exception as e:
+            logger.error(f"Auto-verification failed for connection {id}: {e}")
+            # We don't fail the toggle, but the status will be updated by test_connection
+            
+    db.refresh(conn)
+    
+    return create_connection_response(conn)
+
+
+def create_connection_response(conn: Connection) -> ConnectionResponse:
+    """Helper to create ConnectionResponse from Connection model"""
+    # Extract URL and port from credentials for TrueData connections
+    url = None
+    port = None
+    provider_normalized = conn.provider.upper().replace(" ", "").replace("_", "").replace("-", "") if conn.provider else ""
+    
+    if provider_normalized == "TRUEDATA" and conn.credentials:
+        try:
+            decrypted_json = decrypt_data(conn.credentials)
+            config = json.loads(decrypted_json)
+            url = config.get("auth_url", settings.TRUEDATA_DEFAULT_AUTH_URL)
+            port = config.get("websocket_port", settings.TRUEDATA_DEFAULT_WEBSOCKET_PORT)
+        except Exception as e:
+            # logger.debug(f"Could not extract URL/port: {e}")
+            url = settings.TRUEDATA_DEFAULT_AUTH_URL
+            port = settings.TRUEDATA_DEFAULT_WEBSOCKET_PORT
+            
+    conn_dict = {
+        'id': conn.id,
+        'name': conn.name,
+        'connection_type': conn.connection_type,
+        'provider': conn.provider,
+        'description': conn.description,
+        'environment': conn.environment if conn.environment is not None else "PROD",
+        'status': conn.status if conn.status is not None else "DISCONNECTED",
+        'health': conn.health if conn.health is not None else "HEALTHY",
+        'is_enabled': conn.is_enabled if conn.is_enabled is not None else False,
+        'last_checked_at': conn.last_checked_at,
+        'last_success_at': conn.last_success_at,
+        'created_at': conn.created_at if conn.created_at is not None else datetime.now(timezone.utc),
+        'updated_at': conn.updated_at,
+        'url': url,
+        'port': port
+    }
+    
+    return ConnectionResponse.model_validate(conn_dict)
