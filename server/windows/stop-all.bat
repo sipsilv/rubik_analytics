@@ -88,10 +88,9 @@ if %errorlevel% equ 0 (
     echo [OK] Port 3000 is free
 )
 
-echo.
-echo [INFO] Proactively cleaning up WAL files...
-del /s /q "data\*.wal" >nul 2>&1
-echo [OK] WAL files cleared
+REM Proactive cleanup of WAL files is REMOVED as it causes data loss on forceful DuckDB shutdown.
+REM del /s /q "data\*.wal" >nul 2>&1
+echo [OK] Stopped cleanly.
 
 echo.
 echo ========================================
