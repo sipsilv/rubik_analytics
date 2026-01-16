@@ -833,7 +833,7 @@ export default function AnnouncementsPage() {
                 className="absolute right-2 top-1/2 transform -translate-y-1/2 cursor-pointer z-10 pointer-events-auto"
                 onClick={(e) => {
                   e.preventDefault()
-                  document.getElementById('from-date-input')?.showPicker?.() || document.getElementById('from-date-input')?.focus()
+                  document.getElementById('from-date-input')?.showPicker?.() as HTMLInputElement || document.getElementById('from-date-input')?.focus()
                 }}
               >
                 <Calendar className="w-4 h-4 text-white drop-shadow-md" />
@@ -858,7 +858,7 @@ export default function AnnouncementsPage() {
                 className="absolute right-2 top-1/2 transform -translate-y-1/2 cursor-pointer z-10 pointer-events-auto"
                 onClick={(e) => {
                   e.preventDefault()
-                  document.getElementById('to-date-input')?.showPicker?.() || document.getElementById('to-date-input')?.focus()
+                  document.getElementById('to-date-input')?.showPicker?.() as HTMLInputElement || document.getElementById('to-date-input')?.focus()
                 }}
               >
                 <Calendar className="w-4 h-4 text-white drop-shadow-md" />
