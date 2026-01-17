@@ -4,14 +4,14 @@ import os
 # Current file is in backend/app/services/telegram_raw_listener/
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Go up 4 levels to get to rubik-analytics/ (project root)
+# Go up 4 levels to get to Open Analytics/ (project root)
 # 1. services
 # 2. app
 # 3. backend
-# 4. rubik-analytics
+# 4. Open Analytics
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
 
-# Data Directory: rubik-analytics/data/News/Raw
+# Data Directory: Open Analytics/data/News/Raw
 DATA_DIR = os.path.join(project_root, "data", "News", "Raw")
 DB_PATH = os.path.join(DATA_DIR, "telegram_listing.duckdb")
 

@@ -1,6 +1,6 @@
-# Docker Setup for Rubik Analytics
+# Open Analytics - Docker Environment
 
-This directory contains Docker configuration files for running Rubik Analytics in a containerized environment.
+This directory contains Docker configuration files for running Open Analytics in a containerized environment.
 
 ## Prerequisites
 

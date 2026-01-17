@@ -3,7 +3,7 @@ import os
 # Base directory paths
 # Current file is in backend/app/services/telegram_extractor/
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# rubik-analytics/
+# Open Analytics/
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
 
 # Data Directories

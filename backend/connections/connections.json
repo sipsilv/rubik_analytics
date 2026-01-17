@@ -6,7 +6,7 @@
       "type": "sqlite",
       "category": "auth",
       "config": {
-        "path": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\auth\\sqlite\\auth.db"
+        "path": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\Open Analytics\\data\\auth\\sqlite\\auth.db"
       },
       "is_default": true,
       "is_active": true,
@@ -20,10 +20,10 @@
       "type": "duckdb",
       "category": "analytics",
       "config": {
-        "ohlcv": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\analytics\\duckdb\\ohlcv.duckdb",
-        "indicators": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\analytics\\duckdb\\indicators.duckdb",
-        "signals": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\analytics\\duckdb\\signals.duckdb",
-        "jobs": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\rubik-analytics\\data\\analytics\\duckdb\\jobs.duckdb"
+        "ohlcv": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\Open Analytics\\data\\analytics\\duckdb\\ohlcv.duckdb",
+        "indicators": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\Open Analytics\\data\\analytics\\duckdb\\indicators.duckdb",
+        "signals": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\Open Analytics\\data\\analytics\\duckdb\\signals.duckdb",
+        "jobs": "C:\\Users\\jallu\\OneDrive\\pgp\\Python\\Stock predictor\\Open Analytics\\data\\analytics\\duckdb\\jobs.duckdb"
       },
       "is_default": true,
       "is_active": true,
