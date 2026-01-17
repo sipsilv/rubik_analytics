@@ -7,7 +7,8 @@ import sys
 
 # Configure logging to suppress ONLY WebSocket access logs
 # Keep all other normal logs (HTTP requests, application logs, etc.)
-from app.api.v1 import auth, users, admin, connections, websocket, symbols, screener, announcements, telegram_auth, news
+from app.api.v1 import auth, users, admin, symbols, screener, announcements, news
+from app.api.v1.system import connections, websocket, processors, debug
 from app.core.config import settings
 from app.core.database import get_connection_manager, get_db_router
 
@@ -281,7 +282,7 @@ async def startup_event():
         print(" WEBSOCKET STATUS")
         print("="*70)
         try:
-            from app.core.websocket_manager import manager as ws_manager
+            from app.core.websocket.manager import manager as ws_manager
             import asyncio
             # Create background task for cleanup
             loop = asyncio.get_event_loop()
@@ -367,7 +368,7 @@ async def startup_event():
         
         # Start Corporate Announcements WebSocket Service
         try:
-            from app.services.announcements_websocket_service import get_announcements_websocket_service
+            from app.providers.truedata_websocket import get_announcements_websocket_service
             from app.models.connection import Connection
             from app.core.database import get_db
             
@@ -407,7 +408,7 @@ async def startup_event():
         
         # Start Symbol Scheduler Service
         try:
-            from app.services.scheduler_service import get_scheduler_service
+            from app.providers.scheduler import get_scheduler_service
             from app.api.v1.symbols import get_db_connection as get_symbols_db_connection
             scheduler_service = get_scheduler_service()
             scheduler_service.start()
@@ -462,7 +463,7 @@ async def startup_event():
         
         # Start Telegram Bot Polling Service
         try:
-            from app.services.telegram_bot_service import TelegramBotService
+            from app.providers.telegram_bot import TelegramBotService
             from app.core.database import get_db
             import asyncio
             
@@ -520,7 +521,7 @@ async def startup_event():
         
         # Start Worker Manager (Listeners, Extractors, Processors)
         try:
-            from app.services.worker_manager import worker_manager
+            from app.providers.worker_manager import worker_manager
             worker_manager.start_all()
         except Exception as e:
             print(f"  Worker Manager    : ERROR - {str(e)}")
@@ -547,7 +548,7 @@ async def shutdown_event():
         
         # Stop Scheduler Service
         try:
-            from app.services.scheduler_service import get_scheduler_service
+            from app.providers.scheduler import get_scheduler_service
             scheduler_service = get_scheduler_service()
             scheduler_service.stop()
             print("[OK] Scheduler service stopped")
@@ -556,7 +557,7 @@ async def shutdown_event():
         
         # Stop Corporate Announcements WebSocket Service
         try:
-            from app.services.announcements_websocket_service import get_announcements_websocket_service
+            from app.providers.truedata_websocket import get_announcements_websocket_service
             ws_service = get_announcements_websocket_service()
             ws_service.stop()
             print("[OK] Announcements WebSocket service stopped")
@@ -565,7 +566,7 @@ async def shutdown_event():
         
         # Stop Worker Manager
         try:
-            from app.services.worker_manager import worker_manager
+            from app.providers.worker_manager import worker_manager
             worker_manager.stop_all()
             print("[OK] Worker Manager stopped")
         except Exception as e:
@@ -581,7 +582,7 @@ async def shutdown_event():
         
         # Close Shared Database (DuckDB)
         try:
-            from app.services.shared_db import get_shared_db
+            from app.providers.shared_db import get_shared_db
             get_shared_db().close_all()
             print("[OK] Shared Database connections closed")
         except Exception as e:
@@ -612,16 +613,12 @@ app.include_router(symbols.router, prefix="/api/v1/admin/symbols", tags=["symbol
 app.include_router(screener.router, prefix="/api/v1/admin/screener", tags=["screener"])
 app.include_router(announcements.router, prefix="/api/v1/announcements", tags=["announcements"])
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
-from app.api.v1 import telegram, telegram_connect, telegram_auth
+from app.api.v1 import telegram
 app.include_router(telegram.router, prefix="/api/v1/telegram", tags=["telegram"])
-app.include_router(telegram_connect.router, prefix="/api/v1/telegram", tags=["telegram_connect"])
-app.include_router(telegram_auth.router, prefix="/api/v1/telegram", tags=["telegram_auth"])
+app.include_router(auth.telegram_auth_router, prefix="/api/v1/telegram", tags=["telegram_auth"])
 
-from app.api.v1 import telegram_channels
-app.include_router(telegram_channels.router, prefix="/api/v1/telegram-channels", tags=["telegram_channels"])
-
-from app.api.v1 import processors
 app.include_router(processors.router, prefix="/api/v1/processors", tags=["processors"])
+app.include_router(debug.router, prefix="/api/v1/debug", tags=["debug"])
 app.include_router(news.router, prefix="/api/v1/news", tags=["news"])
 
 @app.get("/health")

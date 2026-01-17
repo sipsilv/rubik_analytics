@@ -12,7 +12,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from typing import Optional
-from app.services.token_service import get_token_service
+from app.providers.token_manager import get_token_service
 
 logger = logging.getLogger(__name__)
 

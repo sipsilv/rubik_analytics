@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.connection import Connection, ConnectionType
 from app.models.telegram_channel import TelegramChannel
-from app.core.security import decrypt_data
+from app.core.auth.security import decrypt_data
 
 logger = logging.getLogger("telegram_listener.config_loader")
 

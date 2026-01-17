@@ -125,3 +125,11 @@ class SchedulerResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+class BulkDeleteRequest(BaseModel):
+    ids: List[int]
+    hard_delete: bool = False
+
+class BulkStatusRequest(BaseModel):
+    ids: List[int]
+    status: str

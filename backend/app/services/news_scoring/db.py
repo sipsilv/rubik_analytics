@@ -2,7 +2,7 @@ import logging
 import os
 import threading
 from .config import RAW_DB_PATH, RAW_TABLE, SCORING_DB_PATH, SCORING_TABLE, DATA_DIR
-from app.services.shared_db import get_shared_db
+from app.providers.shared_db import get_shared_db
 
 logger = logging.getLogger(__name__)
 

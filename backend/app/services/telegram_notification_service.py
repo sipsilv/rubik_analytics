@@ -1,6 +1,6 @@
 
 import logging
-from app.services.telegram_bot_service import TelegramBotService
+from app.providers.telegram_bot import TelegramBotService
 from app.core.database import get_connection_manager
 from app.core.config import settings
 

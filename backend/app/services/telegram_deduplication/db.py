@@ -1,7 +1,7 @@
 import duckdb
 import logging
 from .config import RAW_DB_PATH, RAW_TABLE
-from app.services.shared_db import get_shared_db
+from app.providers.shared_db import get_shared_db
 
 logger = logging.getLogger(__name__)
 

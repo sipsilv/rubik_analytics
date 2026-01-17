@@ -3,7 +3,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 from .config import DB_PATH, TABLE_NAME, RETENTION_HOURS
-from app.services.shared_db import get_shared_db
+from app.providers.shared_db import get_shared_db
 
 logger = logging.getLogger("telegram_listener.db")
 

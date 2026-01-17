@@ -25,7 +25,7 @@ def run_worker():
         
     processor = AIEnrichmentProcessor()
     
-    from app.services.shared_db import get_shared_db
+    from app.providers.shared_db import get_shared_db
     last_cleanup = 0
     cleanup_interval = 3600  # 1 hour
     

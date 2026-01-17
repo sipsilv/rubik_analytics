@@ -5,8 +5,8 @@ import json
 from typing import Optional, Tuple, Dict, List, Any
 from datetime import datetime, timedelta, timezone
 from .config import SCORING_DB_PATH, SCORING_TABLE, AI_DB_PATH, AI_TABLE, FINAL_TABLE
-from app.services.shared_db import get_shared_db
-from app.core.websocket_manager import manager
+from app.providers.shared_db import get_shared_db
+from app.core.websocket.manager import manager
 from .similarity import is_duplicate, calculate_combined_similarity
 
 logger = logging.getLogger(__name__)
