@@ -26,7 +26,7 @@ class TelegramService:
             api_id,
             api_hash,
             system_version="4.16.30-vxCustom",
-            device_model="RubikAnalytics-Discovery",
+            device_model="OpenAnalytics-Discovery",
             app_version="1.0.0",
             connection_retries=2,
             retry_delay=1

@@ -110,7 +110,7 @@ async def login(
                 f"Your login OTP is: <code>{code}</code>\n\n"
                 f"⏰ Valid for <b>5 minutes</b>\n"
                 f"⚠️ If this wasn't you, secure your account immediately.\n\n"
-                f"— Rubik Analytics Security Team"
+                f"— Open Analytics Security Team"
             )
             try:
                 sent = await bot_service.send_message(user.telegram_chat_id, message)
@@ -312,7 +312,7 @@ async def forgot_password(
             f"Your password reset OTP is: <code>{otp}</code>\n\n"
             f"⏰ This code is valid for <b>5 minutes</b>.\n"
             f"⚠️ If you didn't request this, please ignore this message.\n\n"
-            f"— Rubik Analytics Security Team"
+            f"— Open Analytics Security Team"
         )
         
         await notification_service.bot_service.send_message(user.telegram_chat_id, message)
@@ -372,7 +372,7 @@ async def reset_password(
                 f"Your password has been successfully reset.\n\n"
                 f"🕐 Time: <code>{now}</code>\n\n"
                 f"⚠️ If you didn't make this change, contact support immediately.\n\n"
-                f"— Rubik Analytics Security Team"
+                f"— Open Analytics Security Team"
             )
             await notification_service.bot_service.send_message(user.telegram_chat_id, message)
         except Exception as e:

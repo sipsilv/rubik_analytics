@@ -22,7 +22,7 @@ def clear_data():
     final_db = os.path.join(data_dir, "Final", "final_news.duckdb")
 
     print("="*50)
-    print("Rubik Analytics - Data Clearing Utility")
+    print("Open Analytics - Data Clearing Utility")
     print("="*50)
 
     # List of tables to truncate

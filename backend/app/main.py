@@ -58,7 +58,7 @@ logging.getLogger().addFilter(WebSocketLogFilter())
 # Normal application logs, HTTP request logs, errors, and startup messages are all preserved.
 
 app = FastAPI(
-    title="Rubik Analytics API",
+    title="Open Analytics API",
     description="Enterprise Analytics Platform API (v1)",
     version="1.0.1",
 )
@@ -529,7 +529,7 @@ async def startup_event():
         
         # Final startup message
         print("\n" + "="*70)
-        print(" RUBIK ANALYTICS API - READY")
+        print(" OPEN ANALYTICS API - READY")
         print(f" Started at: {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
         print("="*70 + "\n")
 
@@ -668,4 +668,4 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    return {"message": "Rubik Analytics API"}
+    return {"message": "Open Analytics API"}

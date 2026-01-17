@@ -167,7 +167,7 @@ async def send_user_message(
         formatted_message = (
             f"📩 <b>Message from Admin ({admin.username})</b>\n\n"
             f"{message_data.message}\n\n"
-            f"— Rubik Analytics Support"
+            f"— Open Analytics Support"
         )
         
         await ns.bot_service.send_message(user.telegram_chat_id, formatted_message)
@@ -604,7 +604,7 @@ async def update_user(
                 f"<b>Changes made:</b>\n"
                 f"{changes_text}\n\n"
                 f"⚠️ If you have concerns about these changes, contact support.\n\n"
-                f"— Rubik Analytics"
+                f"— Open Analytics"
             )
             await ns.send_info_notification(user, msg)
         except Exception as e:

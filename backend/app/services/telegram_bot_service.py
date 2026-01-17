@@ -240,7 +240,7 @@ class TelegramBotService:
                 
                 await self.send_message(
                     chat_id,
-                    "Welcome to Rubik Analytics! 👋\n\nTo connect your account:\n\n1. Use the **'Connect Telegram'** button in User Settings (Recommended).\n2. OR type: `/start <your_mobile_number>`\n(Example: `/start 9876543210`)",
+                    "Welcome to Open Analytics! 👋\n\nTo connect your account:\n\n1. Use the **'Connect Telegram'** button in User Settings (Recommended).\n2. OR type: `/start <your_mobile_number>`\n(Example: `/start 9876543210`)",
                     reply_markup=reply_markup
                 )
         elif is_admin_sender:
@@ -392,7 +392,7 @@ class TelegramBotService:
                 formatted_message = (
                     f"📩 <b>Message from Admin ({admin.username})</b>\n\n"
                     f"{actual_message}\n\n"
-                    f"— Rubik Analytics Support"
+                    f"— Open Analytics Support"
                 )
                 
                 success = await self.send_message(target_user.telegram_chat_id, formatted_message)

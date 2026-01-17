@@ -15,7 +15,7 @@ class TelegramAuthService:
             api_id, 
             api_hash,
             system_version="4.16.30-vxCustom",
-            device_model="RubikAnalytics",
+            device_model="OpenAnalytics",
             app_version="1.0.0",
             connection_retries=2, # Fail faster so we can report error
             retry_delay=1

@@ -57,7 +57,7 @@ async def update_current_user(
                  f"Your verification OTP is: <code>{otp}</code>\n\n"
                  f"⏰ Valid for <b>5 minutes</b>\n"
                  f"⚠️ If you didn't initiate this, secure your account immediately.\n\n"
-                 f"— Rubik Analytics Security Team"
+                 f"— Open Analytics Security Team"
              )
              await ns.bot_service.send_message(user.telegram_chat_id, message)
              raise HTTPException(
@@ -149,7 +149,7 @@ async def update_current_user(
                 f"The following changes have been made:\n\n"
                 f"{changes_text}\n\n"
                 f"⚠️ If you didn't make these changes, contact support immediately.\n\n"
-                f"— Rubik Analytics"
+                f"— Open Analytics"
             )
             await ns.send_info_notification(user, message)
         except Exception as e:
@@ -221,7 +221,7 @@ async def change_password(
                 f"• Someone may have accessed your account\n"
                 f"• Contact support immediately\n"
                 f"• Secure all your linked accounts\n\n"
-                f"— Rubik Analytics Security Team"
+                f"— Open Analytics Security Team"
             )
             await bot.send_message(user.telegram_chat_id, message)
         except Exception as e:
